@@ -1,0 +1,6 @@
+---
+import TownAppPage from '../layouts/TownAppPage.astro';
+import { getSiteData } from '../lib/site-data';
+const { posts, layout } = await getSiteData();
+---
+<TownAppPage posts={posts} layout={layout} initialSurface="town" />

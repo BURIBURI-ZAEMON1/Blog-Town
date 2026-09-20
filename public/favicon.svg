@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">占位网站 Logo</title>
+  <desc id="description">请用自己的 Logo 替换此文件。</desc>
+  <rect width="256" height="256" rx="52" fill="#f3ead7"/>
+  <path d="M48 118 128 52l80 66v86H48z" fill="#839985" stroke="#39483d" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M96 204v-62h64v62M76 110h104" fill="none" stroke="#f3ead7" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="112" y="158" width="32" height="46" rx="4" fill="#c89f61"/>
+</svg>

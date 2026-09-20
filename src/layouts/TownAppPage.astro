@@ -1,0 +1,43 @@
+---
+import TownBlogApp from '../components/TownBlogApp';
+import { siteConfig } from '../config/site';
+import type { TownLayout } from '../data/town-layout';
+import type { TownPost } from '../components/TownScene';
+import '../styles/global.css';
+
+interface Props {
+  posts: TownPost[];
+  layout: TownLayout;
+  initialSurface: 'town' | 'archive' | 'article';
+  initialPostId?: string;
+}
+
+const { posts, layout, initialSurface, initialPostId } = Astro.props;
+const selectedPost = initialPostId ? posts.find((post) => post.id === initialPostId) : undefined;
+const pageTitle = selectedPost ? `${selectedPost.title} · ${siteConfig.title}` : initialSurface === 'archive' ? `全部文章 · ${siteConfig.title}` : siteConfig.title;
+const description = selectedPost?.description ?? siteConfig.description;
+const canonical = selectedPost
+  ? new URL(`/posts/${encodeURIComponent(selectedPost.id)}/`, siteConfig.siteUrl)
+  : new URL(initialSurface === 'archive' ? '/posts/' : '/', siteConfig.siteUrl);
+const cover = selectedPost?.cover ? new URL(selectedPost.cover, siteConfig.siteUrl) : new URL(siteConfig.logo, siteConfig.siteUrl);
+---
+<html lang={siteConfig.language}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#e9e2d1" />
+    <meta name="description" content={description} />
+    <meta name="author" content={siteConfig.profile.name} />
+    <meta property="og:type" content={selectedPost ? 'article' : 'website'} />
+    <meta property="og:site_name" content={siteConfig.title} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={cover} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>{pageTitle}</title>
+  </head>
+  <body><TownBlogApp client:load posts={posts} layout={layout} initialSurface={initialSurface} initialPostId={initialPostId} /></body>
+</html>

@@ -1,0 +1,13 @@
+---
+import TownAppPage from '../../layouts/TownAppPage.astro';
+import { getSiteData } from '../../lib/site-data';
+
+export async function getStaticPaths() {
+  const { posts } = await getSiteData();
+  return posts.map((post) => ({ params: { id: post.id }, props: { initialPostId: post.id } }));
+}
+
+const { initialPostId } = Astro.props;
+const { posts, layout } = await getSiteData();
+---
+<TownAppPage posts={posts} layout={layout} initialSurface="article" initialPostId={initialPostId} />

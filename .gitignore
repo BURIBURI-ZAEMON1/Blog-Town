@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Astro / build output
+.astro/
+dist/
+
+# Local OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.tsbuildinfo
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Test / coverage output
+coverage/
+test-results/
+playwright-report/
+
+# Local tool caches
+.cache/
+.vite/

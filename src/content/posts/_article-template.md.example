@@ -1,0 +1,25 @@
+---
+townId: "replace-with-a-unique-id" # 必填：永久 ID；同时生成 /posts/此值/，发布后尽量不要修改。
+title: "请填写文章标题" # 必填：文章标题。
+description: "请填写文章摘要。" # 必填：用于文章列表、搜索与 SEO，建议 50～120 字。
+date: "2026-09-20T12:00:00+08:00" # 必填：发布日期与时区；未来日期在到期前不会发布。
+category: "请填写分类" # 必填：一篇文章填写一个分类。
+tags: ["标签一", "标签二"] # 可选：不需要标签时填写 []。
+draft: true # 可选：true 为草稿；确认内容无误后改为 false。
+# updatedAt: "2026-09-20T12:00:00+08:00" # 可选：启用时删除行首 #，填写最后更新时间。
+# featured: true # 可选：推荐标记；启用时删除行首 #。当前主题保留此数据供后续扩展。
+# cover: "/assets/posts/replace-with-a-unique-id/cover.webp" # 可选：启用时删除行首 #，图片放入 public/assets/posts/对应目录。
+# coverAlt: "请填写封面图片说明" # 可选：使用封面时建议一并启用。
+# series: "请填写系列名称" # 可选：系列文章会合并为同一栋建筑；必须与 seriesIndex 同时启用。
+# seriesIndex: 0 # 可选：系列内从 0 开始的顺序，同一系列内不可重复。
+---
+
+这里开始填写正文。支持标准 Markdown。
+
+## 二级标题
+
+正文段落。
+
+![图片说明](/assets/posts/replace-with-a-unique-id/example.webp)
+
+[下载附件](/assets/posts/replace-with-a-unique-id/files/example.zip)

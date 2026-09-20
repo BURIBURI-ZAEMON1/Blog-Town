@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title description">
+  <title id="title">占位作者头像</title>
+  <desc id="description">请用自己的头像替换此文件。</desc>
+  <rect width="256" height="256" rx="128" fill="#e9dfcb"/>
+  <circle cx="128" cy="94" r="46" fill="#839985"/>
+  <path d="M48 226c8-51 37-77 80-77s72 26 80 77" fill="#839985"/>
+  <circle cx="128" cy="128" r="118" fill="none" stroke="#b28e58" stroke-width="8"/>
+</svg>
