@@ -172,10 +172,16 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     return hit?.hit?hit.pickedMesh?.metadata?.postId as string|undefined:undefined;
   }
   const onMove=(e:PointerEvent)=>{
-    if(down&&e.buttons===1){
+    if(down&&e.pointerId===down.pointerId&&e.buttons===1){
       const dx=e.clientX-down.lastX,dy=e.clientY-down.lastY;
       down.lastX=e.clientX;down.lastY=e.clientY;
-      if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>7){
+      const totalX=e.clientX-down.x,totalY=e.clientY-down.y;
+      // Let the browser own vertical touch scrolling (touch-action: pan-y).
+      // Once a horizontal map drag starts, all movement belongs to that drag.
+      if(e.pointerType==='touch'&&!down.moved&&Math.abs(totalY)>Math.abs(totalX))return;
+      if(down.moved||Math.hypot(totalX,totalY)>7){
+        if(!down.moved){lastHover=undefined;callbacks().onHoverPost(undefined);}
+        down.moved=true;
         const perPixel=(camera.orthoRight!-camera.orthoLeft!)/canvas.clientWidth;
         const pan=getDragPanDelta(camera.alpha,camera.beta,dx,dy,perPixel);
         camera.target.x+=pan.x;camera.target.z+=pan.z;
@@ -183,16 +189,27 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
         return;
       }
     }
+    // Touch has no hover: previews are selected explicitly on pointer-up.
+    if(e.pointerType!=='mouse')return;
     const now=performance.now();if(now-lastPickAt<32)return;lastPickAt=now;
     const id=pick(e);canvas.style.cursor=id?'pointer':'grab';
     if(id!==lastHover){lastHover=id;callbacks().onHoverPost(id,id?{x:e.clientX,y:e.clientY}:undefined);}
   };
-  const onLeave=()=>{lastHover=undefined;callbacks().onHoverPost(undefined);if(!down)canvas.style.cursor='grab';};
-  let down:{x:number;y:number;lastX:number;lastY:number;pointerId:number}|undefined;
-  const onDown=(e:PointerEvent)=>{down={x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,pointerId:e.pointerId};canvas.setPointerCapture?.(e.pointerId);};
+  const onLeave=(e:PointerEvent)=>{if(e.pointerType!=='mouse')return;lastHover=undefined;callbacks().onHoverPost(undefined);if(!down)canvas.style.cursor='grab';};
+  let down:{x:number;y:number;lastX:number;lastY:number;pointerId:number;moved:boolean}|undefined;
+  const onDown=(e:PointerEvent)=>{
+    if(!e.isPrimary||e.button!==0||down)return;
+    down={x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,pointerId:e.pointerId,moved:false};
+    canvas.setPointerCapture?.(e.pointerId);
+  };
   const finishPointer=(e:PointerEvent,select:boolean)=>{
-    if(select&&down&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<7){const id=pick(e);if(id)callbacks().onSelectPost(id);}
-    if(down&&canvas.hasPointerCapture?.(down.pointerId))canvas.releasePointerCapture(down.pointerId);
+    if(!down||e.pointerId!==down.pointerId)return;
+    if(select&&!down.moved&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<7){
+      const id=pick(e);
+      if(id)callbacks().onSelectPost(id,e.pointerType);
+      else {lastHover=undefined;callbacks().onHoverPost(undefined);}
+    }
+    if(canvas.hasPointerCapture?.(down.pointerId))canvas.releasePointerCapture(down.pointerId);
     down=undefined;canvas.style.cursor='grab';
   };
   const onUp=(e:PointerEvent)=>finishPointer(e,true);

@@ -35,6 +35,6 @@ export type TownSceneProps = {
   reducedMotion: boolean;
   onHoverPost: (id?: string, anchor?: SceneAnchor) => void;
   onResolvePostAnchor: (id: string, anchor: SceneAnchor) => void;
-  onSelectPost: (id: string) => void;
+  onSelectPost: (id: string, pointerType?: string) => void;
 };
 
