@@ -22,7 +22,7 @@ export function randomFor(seed: string) {
   return () => { state = (1664525 * state + 1013904223) >>> 0; return state / 4294967296; };
 }
 
-export function buildWorld(scene: Scene, layout: TownLayout) {
+export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const kit = new BrickKit(scene), terrain = new ThinBrickKit(scene), rand = randomFor(layout.seed);
   const roads = Object.entries(roadCenterlines).map(([key, path]) => ({ samples: samplePath(path, 12), width: roadWidths[key as keyof typeof roadWidths] }));
   const river = samplePath(riverCenterline, 12);
@@ -51,17 +51,19 @@ export function buildWorld(scene: Scene, layout: TownLayout) {
     return Math.abs(along) <= 2.2 + clearance && Math.abs(across) <= roadWidths.west / 2 + 0.16 + clearance;
   };
   // Tile masks, picking, navigation and building occupation all use world X/Z.
-  for (let x = BOARD.minX+S; x < BOARD.maxX; x+=S*2) for (let z=BOARD.minZ+S;z<BOARD.maxZ;z+=S*2) {
+  const terrainStuds = mobile ? 3 : 2;
+  for (let x = BOARD.minX+S; x < BOARD.maxX; x+=S*terrainStuds) for (let z=BOARD.minZ+S;z<BOARD.maxZ;z+=S*terrainStuds) {
     const p = {x,z}, road = isRoad(p), wet = isWater(p), house = inHouse(p,0.2);
     if (wet && !isBridgeDeck(p,0.08)) {
-      terrain.brick(x,-0.10,z,2,2,rand()<0.25?C.waterLight:rand()<0.5?C.water:C.waterDeep,H/3,false);
-      if (rand()<0.16) terrain.box(x,0.008,z,S*1.4,0.024,S*0.13,'#abdadd');
+      terrain.brick(x,-0.10,z,terrainStuds,terrainStuds,rand()<0.25?C.waterLight:rand()<0.5?C.water:C.waterDeep,H/3,false);
+      if (!mobile && rand()<0.16) terrain.box(x,0.008,z,S*1.4,0.024,S*0.13,'#abdadd');
     } else if (road) {
       const cobbles = [C.roadLight,C.road,C.sand];
-      for (const dx of [-S/2,S/2]) for (const dz of [-S/2,S/2]) terrain.brick(x+dx,0.01,z+dz,1,1,cobbles[Math.floor(rand()*cobbles.length)],H/3,false);
+      if (mobile) terrain.brick(x,0.01,z,terrainStuds,terrainStuds,cobbles[Math.floor(rand()*cobbles.length)],H/3,false);
+      else for (const dx of [-S/2,S/2]) for (const dz of [-S/2,S/2]) terrain.brick(x+dx,0.01,z+dz,1,1,cobbles[Math.floor(rand()*cobbles.length)],H/3,false);
     } else {
       const shore = isWater(p,0.55);
-      terrain.brick(x,0.0,z,2,2,shore?C.sand:greens[Math.floor(rand()*greens.length)],H/3,!house);
+      terrain.brick(x,0.0,z,terrainStuds,terrainStuds,shore?C.sand:greens[Math.floor(rand()*greens.length)],H/3,!house && !mobile);
     }
   }
   // Bridge built in a single local frame; its posts and deck share the same transform.
@@ -128,7 +130,7 @@ export function buildWorld(scene: Scene, layout: TownLayout) {
     kit.brick(x,1.5,z,1,1,leaf,H,true);
   }
   let attempts=0;
-  while(decor.filter(item=>item.radius>=0.6).length<150&&attempts++<9000) {
+  while(decor.filter(item=>item.radius>=0.6).length<(mobile ? 96 : 150)&&attempts++<9000) {
     const x=BOARD.minX+1+rand()*(width-2),z=BOARD.minZ+1+rand()*(depth-2),p={x,z};
     const radius=0.72;
     if(!canPlaceDecor(p,radius,0.22))continue;
@@ -155,7 +157,7 @@ export function buildWorld(scene: Scene, layout: TownLayout) {
     }
   };
   let accentAttempts=0, accentsPlaced=0;
-  while(accentsPlaced<170&&accentAttempts++<14000) {
+  while(accentsPlaced<(mobile ? 108 : 170)&&accentAttempts++<14000) {
     const x=BOARD.minX+0.7+rand()*(width-1.4),z=BOARD.minZ+0.7+rand()*(depth-1.4),p={x,z};
     const radius=0.27;
     if(!canPlaceDecor(p,radius,0.10))continue;

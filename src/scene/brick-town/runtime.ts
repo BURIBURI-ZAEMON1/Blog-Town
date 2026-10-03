@@ -5,10 +5,7 @@ import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector.js';
 import { CubeTexture } from '@babylonjs/core/Materials/Textures/cubeTexture.js';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { Engine } from '@babylonjs/core/Engines/engine.js';
-import { FxaaPostProcess } from '@babylonjs/core/PostProcesses/fxaaPostProcess.js';
-import { GlowLayer } from '@babylonjs/core/Layers/glowLayer.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
-import { HighlightLayer } from '@babylonjs/core/Layers/highlightLayer.js';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration.js';
 import { CreateLineSystem } from '@babylonjs/core/Meshes/Builders/linesBuilder.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial.js';
@@ -36,7 +33,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const engine=new Engine(canvas,true,{stencil:true,preserveDrawingBuffer:false,powerPreference:'default'});
   // A 1.25 DPR ceiling keeps bevel highlights crisp while avoiding the 2.25x
   // render-target cost that a 1.5 DPR cap caused on Retina displays.
-  engine.setHardwareScalingLevel(1/Math.min(window.devicePixelRatio,1.25));
+  const maxDpr = mobile ? 1 : 1.25;
+  engine.setHardwareScalingLevel(1/Math.min(window.devicePixelRatio,maxDpr));
   const scene=new Scene(engine);
   scene.clearColor=Color4.FromHexString('#e3ddcdff');
   scene.environmentTexture=CubeTexture.CreateFromPrefilteredData('/assets/brick-town/studio.env',scene);
@@ -73,28 +71,45 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const sun=new DirectionalLight('large-window-sun',new Vector3(-0.5,-1,-0.65),scene);
   sun.position.set(12,25,16);sun.diffuse=color('#fff0d2');sun.intensity=1.5;
   sun.shadowMinZ=0.1;sun.shadowMaxZ=100;
-  const shadows=new ShadowGenerator(mobile?1024:2048,sun);
-  shadows.usePercentageCloserFiltering=true;shadows.filteringQuality=ShadowGenerator.QUALITY_MEDIUM;
+  const shadows=new ShadowGenerator(mobile?512:2048,sun);
+  shadows.usePercentageCloserFiltering=!mobile;shadows.filteringQuality=mobile?ShadowGenerator.QUALITY_LOW:ShadowGenerator.QUALITY_MEDIUM;
   shadows.bias=0.00012;shadows.normalBias=0.018;
   // Only static architecture and scenery cast shadows. Rendering this depth map
   // once preserves the same town lighting without paying for it every frame.
   shadows.getShadowMap()!.refreshRate=0;
-  const world=buildWorld(scene,layout);
-  const houses=layout.plots.map(p=>buildHouse(scene,p));
+  const world=buildWorld(scene,layout,mobile);
+  const houses=layout.plots.map(p=>buildHouse(scene,p,mobile));
   const houseMeshes=houses.flatMap(h=>h.meshes);
   // Terrain plates cannot cast a useful shadow onto themselves. Excluding that
   // multi-million-instance surface cuts most shadow-map geometry while houses,
   // trees, props and citizens retain their natural shadows.
   for(const m of [...world.shadowCasters,...houseMeshes])shadows.addShadowCaster(m);
   for(const m of [...world.meshes,...houseMeshes]){m.computeWorldMatrix(true);m.freezeWorldMatrix();}
-  const glow=new GlowLayer('warm-window-scatter',scene,{mainTextureRatio:0.35});glow.intensity=0.22;
-  // Empty include lists glow every emissive object. Explicit exclusions prevent
-  // filter outlines from turning whole houses into night lights.
-  for(const m of world.meshes)glow.addExcludedMesh(m);
-  for(const m of houseMeshes)if(!m.metadata.glass)glow.addExcludedMesh(m);
-  const highlights=new HighlightLayer('article-floor-highlight',scene,{mainTextureRatio:0.5});
-  highlights.blurHorizontalSize=0.55;highlights.blurVerticalSize=0.55;highlights.innerGlow=false;
+  let glow:import('@babylonjs/core/Layers/glowLayer.js').GlowLayer|undefined;
+  let highlights:import('@babylonjs/core/Layers/highlightLayer.js').HighlightLayer|undefined;
+  let fxaa:import('@babylonjs/core/PostProcesses/fxaaPostProcess.js').FxaaPostProcess|undefined;
   let disposed=false;
+  let effectsReady=false;
+  const initVisualEffects=async()=>{
+    if(disposed||effectsReady)return;
+    const [layers,highlightModule,fxaaModule]=await Promise.all([
+      import('@babylonjs/core/Layers/glowLayer.js'),
+      import('@babylonjs/core/Layers/highlightLayer.js'),
+      mobile?Promise.resolve(undefined):import('@babylonjs/core/PostProcesses/fxaaPostProcess.js'),
+    ]);
+    if(disposed)return;
+    glow=new layers.GlowLayer('warm-window-scatter',scene,{mainTextureRatio:mobile?0.24:0.35});glow.intensity=0.22;
+    // Empty include lists glow every emissive object. Explicit exclusions prevent
+    // filter outlines from turning whole houses into night lights.
+    for(const m of world.meshes)glow.addExcludedMesh(m);
+    for(const m of houseMeshes)if(!m.metadata.glass)glow.addExcludedMesh(m);
+    highlights=new highlightModule.HighlightLayer('article-floor-highlight',scene,{mainTextureRatio:mobile?0.32:0.5});
+    highlights.blurHorizontalSize=mobile?0.35:0.55;highlights.blurVerticalSize=mobile?0.35:0.55;highlights.innerGlow=false;
+    if(fxaaModule){fxaa=new fxaaModule.FxaaPostProcess('brick-fxaa',1,camera);fxaa.samples=1;}
+    effectsReady=true;
+    lighting();
+    update(state);
+  };
   let ao:import('@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline.js').SSAO2RenderingPipeline|undefined;
   // Contact AO is a secondary refinement, so load it in a separate chunk while
   // the brick assembly overlay is playing instead of blocking the first frame.
@@ -103,11 +118,6 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     ao=new SSAO2RenderingPipeline('brick-contact-shadows',scene,{ssaoRatio:0.5,blurRatio:0.5},[camera]);
     ao.radius=0.35;ao.totalStrength=1.0;ao.samples=8;ao.expensiveBlur=false;
   });
-  // DefaultRenderingPipeline imports and allocates bloom/DoF/chromatic passes
-  // even though this scene only used FXAA. A focused post-process is equivalent
-  // visually and removes megabytes of unused browser code.
-  const fxaa=new FxaaPostProcess('brick-fxaa',1,camera);
-  fxaa.samples=1;
   const postMap=new Map(posts.map(p=>[p.id,p]));
   let state={...initial};let frames=0;let elapsed=0;
   let inView=true,visible=!document.hidden,lastFrame=0;
@@ -140,7 +150,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       mat.albedoColor=color(night?'#edbd6d':'#5e97a4');
     }
     for(const m of world.lamps){const mat=m.material as PBRMaterial;mat.emissiveColor=night?color('#ffba5b'):Color3.Black();mat.emissiveIntensity=night?1.5:0;}
-    rainMesh.setEnabled(rainy);glow.isEnabled=night;
+    rainMesh.setEnabled(rainy);if(glow)glow.isEnabled=night;
   }
   function update(next:SceneState) {
     const rebuildPeople=next.colorMode!==state.colorMode;
@@ -150,9 +160,10 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       const post=postMap.get(mesh.metadata.postId);if(!post)continue;
       const matches=!!(needle||state.category||state.tag)&&(!needle||[post.title,post.description,post.category,...post.tags,post.series??''].join(' ').toLowerCase().includes(needle))&&(!state.category||post.category===state.category)&&(!state.tag||post.tags.includes(state.tag));
       const direct=post.id===state.hoveredPostId||post.id===state.activePostId;
+      if(!highlights)continue;
       if(direct||matches){highlights.addMesh(mesh,color(direct?'#90e3d4':'#edbb53'));hasHighlight=true;}else highlights.removeMesh(mesh);
     }
-    highlights.isEnabled=hasHighlight;
+    if(highlights)highlights.isEnabled=hasHighlight;
     if(state.hoveredPostId)anchor(state.hoveredPostId);
   }
   function anchor(id:string){
@@ -225,7 +236,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   }
   function render(){
     if(disposed||!inView||!visible)return;
-    const now=performance.now();if(now-lastFrame<33)return;
+    const now=performance.now();if(now-lastFrame<(mobile?1000/24:1000/30))return;
     const dt=Math.min(0.05,lastFrame?(now-lastFrame)/1000:0.016);lastFrame=now;elapsed+=dt;
     const slot=Math.floor(Date.now()/900000);
     if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsRainy(layout.seed,slot);populate();lighting();}
@@ -248,7 +259,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     if(rainy&&!state.reducedMotion){for(let i=0;i<drops.length;i++){const d=drops[i];d.y-=dt*d.speed;if(d.y<0.1)d.y+=13;const offset=i*6;rainPositions[offset]=d.x;rainPositions[offset+1]=d.y;rainPositions[offset+2]=d.z;rainPositions[offset+3]=d.x-0.12;rainPositions[offset+4]=d.y-0.65;rainPositions[offset+5]=d.z-0.04;}rainMesh.updateVerticesData(VertexBuffer.PositionKind,rainPositions,false,false);}
     for(const m of world.glints)m.visibility=0.65+Math.sin(elapsed*1.5)*0.15;
     const renderStarted=performance.now();scene.render();const renderCost=performance.now()-renderStarted;frames++;
-    if(frames===1)onFirstFrame?.();
+    if(frames===1){onFirstFrame?.();window.setTimeout(()=>{void initVisualEffects();},mobile?350:0);}
     if(ao&&renderCost>55){slowRenderFrames++;if(slowRenderFrames>=4){ao.dispose();ao=undefined;canvas.dataset.adaptiveAo='off';}}else slowRenderFrames=Math.max(0,slowRenderFrames-1);
     if(frames===1||now-lastDiagnostics>500)publishDiagnostics(now);
   }

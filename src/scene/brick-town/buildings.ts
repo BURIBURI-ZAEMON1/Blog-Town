@@ -106,10 +106,10 @@ const addSpecialDetails = (kit: BrickKit, style: TownBuildingStyle, id: string, 
   }
 };
 
-export function buildHouse(scene: Scene, plot: TownPlot) {
+export function buildHouse(scene: Scene, plot: TownPlot, mobile = false) {
   const root = new TransformNode(`house:${plot.id}`, scene);
   root.position.set(plot.x, GROUND_Y, plot.z);
-  const kit = new BrickKit(scene, root);
+  const kit = new BrickKit(scene, root, 'plastic', !mobile);
   const ids = plot.seriesPostIds ?? [plot.postId!];
   const style = palettes[plot.style ?? 'cottage'];
   // Six by five studs. Footprint is exactly the layout footprint, no root scaling.

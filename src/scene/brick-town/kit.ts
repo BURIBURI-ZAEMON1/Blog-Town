@@ -95,7 +95,7 @@ export class BrickKit {
   private buckets = new Map<string, Bucket>();
   readonly materials = new Map<string, PBRMaterial>();
   readonly meshes: Mesh[] = [];
-  constructor(readonly scene: Scene, readonly parent?: TransformNode, readonly materialGroup = 'plastic') {}
+  constructor(readonly scene: Scene, readonly parent?: TransformNode, readonly materialGroup = 'plastic', readonly studsEnabled = true) {}
   private add(geometry: Geometry, x: number, y: number, z: number, color: string, yaw = 0, id?: string, glass = false) {
     const key = `${color}:${id ?? ''}:${glass}`;
     let bucket = this.buckets.get(key);
