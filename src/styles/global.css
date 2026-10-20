@@ -703,3 +703,6 @@ body { font-family: var(--sans); }
 .mode-night .profile-links a:hover { background: #1e3a5f; color: #eff6ff; }
 .profile-links a { border: 0; background: #f1f5f9; color: #2563eb; }
 .profile-links a:hover { border: 0; background: #dbeafe; color: #1d4ed8; }
+/* The WebGL surface may be alpha-composited on some mobile browsers; giving
+   the canvas its own theme-colored backing keeps the board edge seamless. */
+.town-canvas-host canvas { background: var(--paper); }

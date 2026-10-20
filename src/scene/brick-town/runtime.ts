@@ -144,7 +144,6 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     sun.intensity=night?0.45:rainy?0.75:1.5;sun.diffuse=color(night?'#9cbce8':rainy?'#dbe5e8':'#fff0d2');
     hemi.intensity=night?0.18:rainy?0.40:0.25;scene.environmentIntensity=night?0.20:0.5;
     scene.imageProcessingConfiguration.exposure=night?0.8:0.82;
-    const table=world.table.material as PBRMaterial;table.albedoColor=color(night?'#111c2f':'#ffffff').toLinearSpace();
     for(const m of houseMeshes)if(m.metadata.glass){
       const mat=m.material as PBRMaterial;mat.emissiveColor=night?color('#ffb751'):Color3.Black();mat.emissiveIntensity=night?1.5:0;
       mat.albedoColor=color(night?'#edbd6d':'#5e97a4');

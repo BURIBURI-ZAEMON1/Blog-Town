@@ -1,6 +1,4 @@
-import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial.js';
-import { Color3 } from '@babylonjs/core/Maths/math.color.js';
 import type { Scene } from '@babylonjs/core/scene.js';
 import { townBoard, townTravelRoutes, roadCenterlines, roadWidths, riverCenterline, riverWidth, townCenterRoundaboutRadius, type TownLayout, type Point } from '../../data/town-layout';
 import { samplePath, pointInPolygon, findPathIntersection } from '../../data/town-spatial';
@@ -192,8 +190,7 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const waterMeshes=meshes.filter(m=>[C.water,C.waterLight,C.waterDeep].includes(m.metadata.baseColor));
   for(const m of waterMeshes){const mat=m.material as PBRMaterial;mat.roughness=0.13;mat.metallic=0.08;mat.clearCoat.intensity=0.7;}
   const glints=meshes.filter(m=>m.metadata.baseColor==='#abdadd');
-  const table=CreateGround('studio-table',{width:200,height:200},scene);
-  table.position.y=-0.81; table.receiveShadows=true; table.isPickable=false;
-  const tableMaterial=new PBRMaterial('matte-studio',scene);tableMaterial.albedoColor=Color3.FromHexString('#ffffff').toLinearSpace();tableMaterial.roughness=0.93;tableMaterial.metallic=0;table.material=tableMaterial;
-  return {meshes:[...meshes,...fountainMeshes],shadowCasters:[...propMeshes,...fountainMeshes,...lamps],lamps,decor,table,bridge,glints,waterMeshes,isRoad,isWater,inHouse};
+  // Leave the space beyond the modeled board empty so the scene's clear color
+  // matches the surrounding UI exactly, without tone mapping a ground material.
+  return {meshes:[...meshes,...fountainMeshes],shadowCasters:[...propMeshes,...fountainMeshes,...lamps],lamps,decor,bridge,glints,waterMeshes,isRoad,isWater,inHouse};
 }
