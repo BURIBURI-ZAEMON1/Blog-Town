@@ -81,7 +81,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .sidebar-scroll::-webkit-scrollbar { width: 7px; }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb { border-radius: 8px; background: rgba(150,133,96,.55); }
-.sidebar-footer { flex: 0 0 auto; min-height: 42px; margin: 0; padding: 12px 21px 14px; border-top: 1px solid var(--line); background: inherit; }
+.sidebar-footer { display: block; flex: 0 0 auto; min-height: 42px; margin: 0; padding: 12px 21px 14px; border-top: 1px solid var(--line); background: inherit; }
 .sidebar-footer-main { display: flex; justify-content: space-between; gap: 12px; }
 .sidebar-powered { margin-top: 7px; color: var(--muted-2); font-family: var(--mono); font-size: 8px; letter-spacing: .04em; }
 .sidebar-powered-link { color: var(--sage); font-family: Georgia, 'Times New Roman', serif; font-size: 10px; font-weight: 700; letter-spacing: .02em; text-decoration: none; }
