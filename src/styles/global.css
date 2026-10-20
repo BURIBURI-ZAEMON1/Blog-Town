@@ -582,3 +582,124 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   .touch-preview-read .icon { width: 13px; height: 13px; }
   .mode-night .town-touch-preview { background: color-mix(in srgb, var(--paper-3) 98%, transparent); }
 }
+
+/* --- White editorial theme -------------------------------------------------
+   The formal site intentionally keeps the chrome quiet: the town remains the
+   visual anchor and layout is separated by whitespace rather than rules. */
+:root {
+  --paper: #ffffff;
+  --paper-2: #f8fafc;
+  --paper-3: #ffffff;
+  --ink: #172033;
+  --muted: #64748b;
+  --muted-2: #94a3b8;
+  --line: transparent;
+  --line-strong: transparent;
+  --sage: #2563eb;
+  --blue: #3b82f6;
+  --gold: #2563eb;
+  --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --serif: var(--sans);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+html, body, .app-shell { background: var(--paper); color: var(--ink); }
+body { font-family: var(--sans); }
+
+.sidebar {
+  border: 0;
+  background: var(--paper);
+  box-shadow: none;
+  scrollbar-color: rgba(148, 163, 184, .28) transparent;
+}
+.sidebar::after { display: none; }
+.sidebar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, .28); }
+.brand-mark, .top-logo-mark { border: 0; background: #eff6ff; color: #2563eb; box-shadow: none; border-radius: 9px; }
+.brand-name { color: #0f172a; }
+.brand-subtitle, .sidebar-section-label, .panel-eyebrow, .section-eyebrow, .town-kicker, .aside-eyebrow { color: #64748b; }
+.nav-item { color: #64748b; border-radius: 10px; }
+.nav-item:hover, .nav-item.is-active { background: #eff6ff; color: #1d4ed8; transform: none; }
+.nav-item.is-active { box-shadow: none; }
+.sidebar-rule, .profile-panel, .sidebar-panel, .profile-note, .series-directory { border-color: transparent; background: transparent; }
+.sidebar-tags button { border-color: transparent; background: #f8fafc; color: #2563eb; border-radius: 999px; }
+.sidebar-tags button:hover, .sidebar-tags button.is-selected { border-color: transparent; background: #dbeafe; color: #1d4ed8; }
+.sidebar-taxonomy button, .sidebar-post, .friend-row, .series-directory button { border-color: transparent; }
+.sidebar-taxonomy button:hover, .sidebar-taxonomy button.is-selected,
+.sidebar-post:hover, .sidebar-post.is-hovered, .friend-row:hover,
+.series-directory button:hover, .series-directory button.is-current { background: #f8fafc; }
+.sidebar-post strong, .series-directory span, .profile-panel h2 { color: #172033; }
+.sidebar-post-index, .series-directory b { color: #2563eb; }
+
+.main-surface { scrollbar-color: rgba(148, 163, 184, .25) transparent; }
+.main-surface::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, .25); }
+.topnav { border: 0; background: color-mix(in srgb, var(--paper) 94%, transparent); box-shadow: none; }
+.top-logo-mark { border-radius: 8px; }
+.top-search { border: 0; border-radius: 10px; background: #f8fafc; padding: 0 12px; }
+.top-search input::placeholder, .top-search kbd, .top-live { color: #94a3b8; }
+.mode-button { color: #64748b; }
+.top-live i { background: #22c55e; box-shadow: 0 0 0 3px rgba(34, 197, 94, .13); }
+.avatar-mini { background: #dbeafe; color: #1d4ed8; }
+
+.town-meta-row { color: #64748b; }
+.town-subline, .town-seed, .town-caption, .recent-count { color: #94a3b8; }
+.town-stage-wrap { background: var(--paper); box-shadow: none; }
+.town-canvas-host { border: 0; background: var(--paper); }
+.town-canvas-host::after { display: none; }
+.town-canvas-host canvas { filter: none; }
+.brick-controls button { border: 0; background: rgba(255,255,255,.88); color: #2563eb; box-shadow: 0 6px 18px rgba(15, 23, 42, .08); }
+
+.recent-posts, .archive-toolbar, .archive-row, .article-footer, .article-contents, .related-posts,
+.main-explore-panel, .article-location { border-color: transparent; }
+.recent-card, .archive-row, .main-friend-row, .article-location { background: #f8fafc; box-shadow: none; }
+.recent-card:hover { background: #eff6ff; }
+.card-bottom, .tooltip-meta, .tooltip-tags { color: #2563eb; }
+
+/* Night mode: a restrained ink/navy counterpart, using the same borderless
+   spacing system and blue signal color as the daytime surface. */
+.mode-night {
+  --paper: #0b1220;
+  --paper-2: #111c2f;
+  --paper-3: #111827;
+  --ink: #f8fafc;
+  --muted: #94a3b8;
+  --muted-2: #64748b;
+  --sage: #93c5fd;
+  --blue: #60a5fa;
+  --gold: #93c5fd;
+  background: var(--paper);
+}
+.mode-night html, .mode-night body, .mode-night .app-shell { background: var(--paper); color: var(--ink); }
+.mode-night .sidebar, .mode-night .topnav, .mode-night .town-stage-wrap, .mode-night .town-canvas-host { background: var(--paper); }
+.mode-night .brand-name, .mode-night .sidebar-post strong, .mode-night .series-directory span,
+.mode-night .profile-panel h2, .mode-night .top-search input { color: #f8fafc; }
+.mode-night .brand-mark, .mode-night .top-logo-mark, .mode-night .top-search,
+.mode-night .nav-item:hover, .mode-night .nav-item.is-active,
+.mode-night .sidebar-taxonomy button:hover, .mode-night .sidebar-taxonomy button.is-selected,
+.mode-night .sidebar-post:hover, .mode-night .sidebar-post.is-hovered, .mode-night .friend-row:hover,
+.mode-night .series-directory button:hover, .mode-night .series-directory button.is-current,
+.mode-night .recent-card, .mode-night .archive-row, .mode-night .main-friend-row, .mode-night .article-location { background: #111c2f; }
+.mode-night .recent-card:hover { background: #172642; }
+.mode-night .top-search input::placeholder, .mode-night .top-search kbd, .mode-night .top-live,
+.mode-night .town-subline, .mode-night .town-seed, .mode-night .town-caption, .mode-night .recent-count { color: #64748b; }
+.mode-night .brick-controls button { background: rgba(17, 28, 47, .9); color: #93c5fd; box-shadow: 0 8px 24px rgba(0, 0, 0, .28); }
+.mode-night .town-canvas-host::after { display: none; }
+
+/* Structural chrome never draws separator rules in either mode. */
+.sidebar, .topnav, .town-canvas-host, .town-stage-wrap, .sidebar-rule,
+.profile-panel, .profile-note, .sidebar-panel, .series-directory,
+.recent-posts, .archive-toolbar, .archive-row, .article-footer,
+.article-contents, .related-posts, .main-explore-panel, .article-location { border-top: 0 !important; border-right: 0 !important; border-bottom: 0 !important; border-left: 0 !important; }
+
+/* Keep the sidebar's internal separators as quiet as the outer chrome. */
+.sidebar, .sidebar * { border-color: transparent !important; }
+.mode-night .recent-card, .mode-night .recent-card.card-1,
+.mode-night .recent-card.card-2, .mode-night .recent-card.card-3,
+.mode-night .archive-row, .mode-night .main-friend-row { background: #111c2f; }
+.mode-night .recent-card:hover { background: #172642; }
+.mode-night .recent-card strong, .mode-night .article-body p,
+.mode-night .article-section-content, .mode-night .profile-panel p,
+.mode-night .profile-note { color: #dbe4f0; }
+.mode-night .profile-links a { border: 0; background: #172642; color: #bfdbfe; }
+.mode-night .profile-links a:hover { background: #1e3a5f; color: #eff6ff; }
+.profile-links a { border: 0; background: #f1f5f9; color: #2563eb; }
+.profile-links a:hover { border: 0; background: #dbeafe; color: #1d4ed8; }

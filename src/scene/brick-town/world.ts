@@ -194,6 +194,6 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const glints=meshes.filter(m=>m.metadata.baseColor==='#abdadd');
   const table=CreateGround('studio-table',{width:200,height:200},scene);
   table.position.y=-0.81; table.receiveShadows=true; table.isPickable=false;
-  const tableMaterial=new PBRMaterial('matte-studio',scene);tableMaterial.albedoColor=Color3.FromHexString('#d6cfbc').toLinearSpace();tableMaterial.roughness=0.93;tableMaterial.metallic=0;table.material=tableMaterial;
+  const tableMaterial=new PBRMaterial('matte-studio',scene);tableMaterial.albedoColor=Color3.FromHexString('#ffffff').toLinearSpace();tableMaterial.roughness=0.93;tableMaterial.metallic=0;table.material=tableMaterial;
   return {meshes:[...meshes,...fountainMeshes],shadowCasters:[...propMeshes,...fountainMeshes,...lamps],lamps,decor,table,bridge,glints,waterMeshes,isRoad,isWater,inHouse};
 }
