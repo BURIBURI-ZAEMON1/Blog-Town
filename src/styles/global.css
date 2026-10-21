@@ -722,8 +722,18 @@ body { font-family: var(--sans); }
   letter-spacing: 0;
 }
 .brand-name { font-size: 18px; font-weight: 750; line-height: 1.3; }
+.brand-block > div:nth-child(2) { flex: 1; min-width: 0; }
 .top-logo { font-size: 15px; font-weight: 700; }
-.brand-subtitle { font-family: var(--accent); font-size: 14px; font-style: italic; font-weight: 500; }
+.brand-subtitle {
+  overflow: hidden;
+  font-family: var(--accent);
+  font-size: 14px;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .profile-panel h2 { font-family: var(--expressive); font-size: 28px; font-weight: 400; }
 .profile-headline, .profile-panel p, .profile-note,
 .recent-card p, .archive-heading p, .archive-row small,
@@ -987,7 +997,7 @@ body { font-family: var(--sans); }
   width: max-content;
   color: var(--ink);
   font-family: var(--accent);
-  font-size: 22px;
+  font-size: 20px;
   font-style: italic;
   font-weight: 550;
   text-decoration: none;
@@ -999,7 +1009,7 @@ body { font-family: var(--sans); }
 .top-wordmark:hover, .top-wordmark:hover .icon { color: var(--sage); }
 @media (max-width: 720px) {
   .town-zoom-control { display: none; }
-  .top-wordmark { font-size: 19px; }
+  .top-wordmark { font-size: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .town-zoom-townmark,
