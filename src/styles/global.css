@@ -90,7 +90,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .sidebar-posts { max-height: none; overflow: visible; }
 .sidebar-spacer { flex: 1 0 22px; }
 .main-explore-panel { margin: 34px 42px 0; padding: 22px 0 27px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); }
-.main-explore-panel h2 { margin: 9px 0 20px; font-family: var(--serif); font-size: clamp(28px, 3vw, 42px); letter-spacing: -.08em; }
 .main-friends-list { max-width: 620px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; }
 .main-friend-row { display: grid; grid-template-columns: 28px minmax(0,1fr) 14px; gap: 9px; align-items: center; padding: 11px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
 .main-friend-row:hover { background: color-mix(in srgb, var(--paper-3) 70%, transparent); }
@@ -230,8 +229,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 
 /* Friend links become their own archive surface instead of sitting above posts. */
 .friends-explore { min-height: calc(100dvh - 102px); padding: 42px 0 72px; border-bottom: 0; }
-.friends-explore-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 36px; margin-bottom: 40px; padding-bottom: 30px; border-bottom: 1px solid var(--line); }
-.friends-explore-heading h2 { margin-bottom: 10px; }
 .friends-ornament { position: relative; width: 118px; height: 92px; flex: 0 0 auto; color: color-mix(in srgb, var(--sage) 70%, var(--muted)); font-family: var(--mono); font-size: 8px; line-height: 1.55; letter-spacing: .12em; text-align: center; }
 .friends-ornament::before, .friends-ornament::after { content: ''; position: absolute; left: 5px; right: 5px; height: 1px; background: var(--line-strong); }
 .friends-ornament::before { top: 17px; transform: rotate(-8deg); }
@@ -269,7 +266,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 /* Night mode needs explicit high-contrast heading colors. */
 .mode-night { --ink: #fff7e8; --muted: #c2c6ba; --muted-2: #aeb4a7; }
 .mode-night .archive-heading h1,
-.mode-night .main-explore-panel h2,
 .mode-night .article-layout article h1,
 .mode-night .article-heading-row h2,
 .mode-night .article-heading-row h3,
@@ -292,7 +288,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   .archive-row.has-cover { grid-template-columns: 96px minmax(0, 1fr) 15px; min-height: 88px; }
   .archive-cover, .archive-cover img { min-height: 0; }
   .friends-explore { min-height: auto; padding-top: 28px; }
-  .friends-explore-heading { margin-bottom: 25px; }
   .friends-ornament { display: none; }
   .friends-explore .main-friends-list { grid-template-columns: 1fr; }
   .friends-explore .main-friend-row { min-height: 88px; grid-template-columns: 48px minmax(0, 1fr) 16px; padding: 14px; }
@@ -699,7 +694,7 @@ body { font-family: var(--sans); }
 /* Editorial display, neutral reading, and precise map metadata each have a
    separate typographic voice. Keep CJK tracking neutral at every scale. */
 .brand-name, .top-logo, .profile-panel h2,
-.recent-posts h2, .main-explore-panel h2, .archive-heading h1,
+.recent-posts h2, .archive-heading h1,
 .article-layout article h1, .article-heading-row h2, .article-heading-row h3,
 .article-heading-row h4, .article-heading-row h5, .article-heading-row h6,
 .recent-card strong, .archive-row strong, .sidebar-post strong,
@@ -859,6 +854,50 @@ body { font-family: var(--sans); }
   .town-caption { font-size: 9px; }
   .archive-heading h1, .article-layout article h1 { line-height: 1.3; }
   .article-section-content, .article-body p { font-size: 15px; line-height: 1.9; }
+}
+
+/* The archive title stays outside the scrolling results, for every explore view. */
+.archive-shell-heading {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 1250px;
+  margin: 0 auto;
+  padding: 52px 42px 29px;
+  background: var(--paper);
+}
+.archive-shell-heading h1 { margin-bottom: 0; }
+.archive-page { padding-top: 0; }
+.main-explore-panel { margin-top: 0; padding-top: 22px; padding-bottom: 26px; }
+.friends-explore { min-height: 0; padding-top: 22px; }
+
+/* An empty media slot still occupies the same column as a cover. */
+.archive-row, .archive-row.has-cover {
+  grid-template-columns: 142px minmax(0, 1fr) 70px 15px;
+  min-height: 112px;
+  border-radius: 8px;
+  background: var(--paper);
+  transition: background-color .18s ease;
+}
+.archive-row:hover, .archive-row:focus-visible { background: #eff6ff; }
+.archive-index {
+  justify-self: center;
+  color: var(--muted-2);
+  font-family: var(--accent);
+  font-size: 21px;
+  font-style: italic;
+}
+.mode-night .archive-row { background: var(--paper); }
+.mode-night .archive-row:hover, .mode-night .archive-row:focus-visible { background: #111c2f; }
+
+@media (max-width: 1000px) {
+  .archive-row, .archive-row.has-cover { grid-template-columns: 118px minmax(0, 1fr) 58px 15px; }
+}
+@media (max-width: 720px) {
+  .archive-shell-heading { padding: 30px 16px 22px; }
+  .archive-page, .archive-page.is-filtered-view { padding-top: 0; }
+  .main-explore-panel, .friends-explore { margin-top: 0; padding-top: 12px; }
+  .archive-row, .archive-row.has-cover { grid-template-columns: 96px minmax(0, 1fr) 15px; min-height: 88px; }
+  .archive-index { font-size: 17px; }
 }
 
 /* A small molded-plastic lens that shares the site's quiet blue control language. */
