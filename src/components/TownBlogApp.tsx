@@ -519,7 +519,7 @@ function RecentPosts({ posts, hasFilter, onOpen, onClear, sectionRef }: { posts:
 function ArchiveHeading({ panel, postCount }: { panel?: ExplorePanel; postCount: number }) {
   const titles = { categories: ['CATEGORIES', '分类'], tags: ['TAGS', '标签'], friends: ['FRIEND LINKS', '友邻'] } as const;
   const [eyebrow, title] = panel ? titles[panel] : [`THE ARCHIVE · ${String(postCount).padStart(2, '0')} NOTES`, '文章档案'];
-  return <header className="archive-heading archive-shell-heading"><div><span className="section-eyebrow">{eyebrow}</span><h1>{title}</h1></div>{!panel && <div className="archive-mark">MAP<br /><b>01</b></div>}{panel === 'friends' && <div className="friends-ornament" aria-hidden="true"><i /><i /><i /><span>VISIT<br />THEIR<br />TOWNS</span></div>}</header>;
+  return <header className="archive-heading archive-shell-heading"><div><span className="section-eyebrow">{eyebrow}</span><h1>{title}</h1></div>{panel === 'friends' && <div className="friends-ornament" aria-hidden="true"><i /><i /><i /><span>VISIT<br />THEIR<br />TOWNS</span></div>}</header>;
 }
 
 function ArchiveView({ posts, query, activeCategory, activeTag, compact, onOpen }: { posts: TownPost[]; query: string; activeCategory?: string; activeTag?: string; compact: boolean; onOpen: (id: string) => void }) {
