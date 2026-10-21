@@ -127,7 +127,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const inputRef = useRef<HTMLInputElement>(null);
   const returnContextRef = useRef<ReturnContext | undefined>(undefined);
   const recentRef = useRef<HTMLElement>(null);
-  const mainSurfaceRef = useRef<HTMLElement>(null);
+  const mainSurfaceRef = useRef<HTMLDivElement>(null);
 
   const postMap = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);
   const sortedPosts = useMemo(() => [...posts].sort((a, b) => +new Date(b.date) - +new Date(a.date)), [posts]);
@@ -467,7 +467,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         </div>
       </aside>
 
-      <main className="main-surface" ref={mainSurfaceRef} inert={sidebarModal}>
+      <main className="main-surface" inert={sidebarModal}>
         <header className={`topnav ${searchOpen ? 'is-search-open' : ''}`}>
           <button ref={menuButtonRef} className="mobile-sidebar-toggle" type="button" aria-label={mobileSidebarOpen ? '关闭侧边栏' : '打开侧边栏'} aria-expanded={mobileSidebarOpen} aria-controls="site-sidebar" onClick={openMobileSidebar}>{icon(mobileSidebarOpen ? 'close' : 'menu')}</button>
           <a className="top-wordmark" href="https://github.com/BURIBURI-ZAEMON1/Blog-Town" target="_blank" rel="noreferrer noopener" aria-label="Blog Town GitHub 仓库"><span>Blog</span> <strong>Town</strong>{icon('external')}</a>
@@ -475,6 +475,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           <div className="topnav-actions"><button className="mobile-search-toggle" aria-label={searchOpen ? '关闭搜索' : '打开搜索'} aria-expanded={searchOpen} onClick={() => { if (searchOpen) { setSearchOpen(false); inputRef.current?.blur(); } else { setSearchOpen(true); window.requestAnimationFrame(() => inputRef.current?.focus()); } }}>{icon(searchOpen ? 'close' : 'search')}</button><button className="mode-button" onClick={() => setColorMode((mode) => mode === 'day' ? 'night' : 'day')} aria-label="切换昼夜模式">{colorMode === 'day' ? icon('moon') : icon('sun')}<span>{colorMode === 'day' ? '夜间' : '日间'}</span></button><span className="top-live"><i /> LIVE MAP</span><span className="avatar-mini"><img src={siteConfig.profile.avatar} alt={siteConfig.profile.name} /></span></div>
         </header>
 
+        <div className="main-scroll" ref={mainSurfaceRef}>
         {surface === 'town' && <section className="town-home">
           <TownStage posts={posts} layout={layout} activePostId={selectedPostId} hoveredPostId={touchPostId ?? hoveredPostId} query={query} category={highlightCategory} tag={highlightTag} categoryPreview={Boolean(previewCategory)} tagPreview={Boolean(previewTag)} colorMode={colorMode} reducedMotion={reducedMotion} onHoverPost={onHoverPost} onResolvePostAnchor={onResolvePostAnchor} onSelectPost={selectScenePost} hoveredPost={hoveredPost} hoverAnchor={hoverAnchor} touchPost={touchPost} onCloseTouchPreview={() => setTouchPostId(undefined)} />
           <p className="mobile-town-hint">点击建筑预览，再次点击或选择「阅读文章」打开；横向拖动地图，纵向滑动页面。</p>
@@ -486,6 +487,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         {surface !== 'town' && explorePanel && explorePanel !== 'friends' && <ArchiveView posts={filteredPosts} allPosts={posts} query={query} activeCategory={activeCategory} activeTag={activeTag} compact onOpen={openArticle} />}
         {surface === 'article' && !explorePanel && selectedPost && <ArticleView post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onBack={returnFromArticle} onOpen={openArticle} related={posts.filter((post) => post.id !== selectedPost.id && (post.category === selectedPost.category || Boolean(selectedPost.series && post.series === selectedPost.series))).slice(0, 3)} />}
         {surface === 'article' && !explorePanel && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
+        </div>
       </main>
     </div>
   );
