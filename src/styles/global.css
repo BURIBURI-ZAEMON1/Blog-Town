@@ -864,6 +864,7 @@ body { font-family: var(--sans); }
   margin: 0 auto;
   padding: 52px 42px 29px;
   background: var(--paper);
+  border: 0;
 }
 .archive-shell-heading h1 { margin-bottom: 0; }
 .archive-page { padding-top: 0; }
