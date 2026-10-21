@@ -462,7 +462,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           <SidebarContent panel={sidebarPanel} posts={sidebarPosts} categories={categories} tags={tags} activeCategory={activeCategory} activeTag={activeTag} currentSeriesPosts={surface === 'article' ? currentSeriesPosts : []} selectedPostId={selectedPostId} hoveredPostId={hoveredPostId} onHover={onSidebarPostHover} onCategoryPreview={onCategoryPreview} onTagPreview={onTagPreview} onCategory={chooseCategory} onTag={chooseTag} onOpenArticle={openArticle} onBack={() => { setPreviewCategory(undefined); setPreviewTag(undefined); setSidebarPanel(activeCategory ? 'categories' : activeTag ? 'tags' : 'profile'); setActiveCategory(undefined); setActiveTag(undefined); }} />
         </div>
         <div className="sidebar-footer">
-          <div className="sidebar-footer-main"><span>{siteConfig.copyright}</span><a href={siteConfig.siteUrl}>{new URL(siteConfig.siteUrl).hostname}</a></div>
+          <div className="sidebar-footer-main"><span>{siteConfig.copyright}</span></div>
           <div className="sidebar-powered">Powered by <a className="sidebar-powered-link" href="https://github.com/BURIBURI-ZAEMON1/Blog-Town" target="_blank" rel="noreferrer noopener">Blog-Town</a></div>
         </div>
       </aside>
