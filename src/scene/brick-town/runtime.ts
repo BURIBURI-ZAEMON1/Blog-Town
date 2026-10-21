@@ -28,7 +28,7 @@ export type SceneState = Pick<TownSceneProps,'activePostId'|'hoveredPostId'|'que
 export type SceneCallbacks = Pick<TownSceneProps,'onHoverPost'|'onResolvePostAnchor'|'onSelectPost'>;
 const color=(hex:string)=>Color3.FromHexString(hex);
 
-export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:TownSceneProps['posts'],initial:SceneState,callbacks:()=>SceneCallbacks,onFirstFrame?:()=>void) {
+export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:TownSceneProps['posts'],initial:SceneState,callbacks:()=>SceneCallbacks,onFirstFrame?:()=>void,onZoomChange?:(zoom:number,defaultZoom:number)=>void) {
   const mobile=canvas.clientWidth<720;
   const engine=new Engine(canvas,true,{stencil:true,preserveDrawingBuffer:false,powerPreference:'default'});
   // A 1.25 DPR ceiling keeps bevel highlights crisp while avoiding the 2.25x
@@ -178,7 +178,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   let pinch:{startDistance:number;startZoom:number;moved:boolean}|undefined;
   const clampZoom=(value:number)=>Math.max(0.75,Math.min(2.6,value));
   const distanceBetween=(a:{x:number;y:number},b:{x:number;y:number})=>Math.hypot(a.x-b.x,a.y-b.y);
-  const applyZoom=(nextZoom:number)=>{const clamped=clampZoom(nextZoom);if(Math.abs(clamped-zoom)<0.0001)return;zoom=clamped;fit();};
+  const applyZoom=(nextZoom:number)=>{const clamped=clampZoom(nextZoom);if(Math.abs(clamped-zoom)<0.0001)return;zoom=clamped;fit();onZoomChange?.(zoom,defaultZoom);};
   function pick(event:PointerEvent){
     const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
     // Pick ALL real solid surfaces. Roof/terrain/tree occlusion is respected;
@@ -186,12 +186,6 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     const hit=scene.pick(x,y,m=>m.isPickable&&m.isVisible);
     return hit?.hit?hit.pickedMesh?.metadata?.postId as string|undefined:undefined;
   }
-  const onWheel=(event:WheelEvent)=>{
-    // The map owns wheel input while the pointer is over it; page scrolling
-    // remains available everywhere else in the main surface.
-    event.preventDefault();
-    applyZoom(zoom*Math.pow(1.0015,-event.deltaY));
-  };
   const onMove=(e:PointerEvent)=>{
     if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
     if(pinch&&pointers.size>=2){
@@ -261,7 +255,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   };
   const onUp=(e:PointerEvent)=>finishPointer(e,true);
   const onCancel=(e:PointerEvent)=>finishPointer(e,false);
-  canvas.addEventListener('wheel',onWheel,{passive:false});canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerleave',onLeave);canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onCancel);
+  canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerleave',onLeave);canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onCancel);
   populate();lighting();update(initial);
   const resize=new ResizeObserver(()=>{fit();if(state.hoveredPostId)anchor(state.hoveredPostId);});resize.observe(canvas.parentElement!);
   let lastDiagnostics=0,slowRenderFrames=0;
@@ -302,11 +296,12 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const syncVisibility=()=>{if(inView&&visible){lastFrame=0;engine.runRenderLoop(render);}else engine.stopRenderLoop(render);};
   const observer=new IntersectionObserver(([entry])=>{inView=!!entry?.isIntersecting;syncVisibility();});observer.observe(canvas);
   const onVisibility=()=>{visible=!document.hidden;syncVisibility();};document.addEventListener('visibilitychange',onVisibility);
+  onZoomChange?.(zoom,defaultZoom);
   engine.runRenderLoop(render);
   return {
     update,anchor,
     zoom(amount:number){applyZoom(zoom+amount);},
-    home(){zoom=defaultZoom;camera.target.set(0,0.2,0);fit();},
-    dispose(){disposed=true;engine.stopRenderLoop(render);resize.disconnect();observer.disconnect();document.removeEventListener('visibilitychange',onVisibility);canvas.removeEventListener('wheel',onWheel);canvas.removeEventListener('pointermove',onMove);canvas.removeEventListener('pointerleave',onLeave);canvas.removeEventListener('pointerdown',onDown);canvas.removeEventListener('pointerup',onUp);canvas.removeEventListener('pointercancel',onCancel);pointers.clear();pinch=undefined;down=undefined;ao?.dispose();scene.dispose();engine.dispose();},
+    home(){zoom=defaultZoom;camera.target.set(0,0.2,0);fit();onZoomChange?.(zoom,defaultZoom);},
+    dispose(){disposed=true;engine.stopRenderLoop(render);resize.disconnect();observer.disconnect();document.removeEventListener('visibilitychange',onVisibility);canvas.removeEventListener('pointermove',onMove);canvas.removeEventListener('pointerleave',onLeave);canvas.removeEventListener('pointerdown',onDown);canvas.removeEventListener('pointerup',onUp);canvas.removeEventListener('pointercancel',onCancel);pointers.clear();pinch=undefined;down=undefined;ao?.dispose();scene.dispose();engine.dispose();},
   };
 }
