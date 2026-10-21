@@ -857,18 +857,24 @@ body { font-family: var(--sans); }
 }
 
 /* The archive title stays outside the scrolling results, for every explore view. */
-.archive-shell-heading {
-  flex: 0 0 auto;
+:root { --archive-gutter: 42px; }
+.archive-page, .main-explore-panel, .archive-shell-heading {
   width: 100%;
   max-width: 1250px;
-  margin: 0 auto;
-  padding: 52px 42px 29px;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+.archive-page { padding-left: var(--archive-gutter); padding-right: var(--archive-gutter); }
+.archive-shell-heading {
+  flex: 0 0 auto;
+  padding: 52px var(--archive-gutter) 29px;
   background: var(--paper);
   border: 0;
 }
 .archive-shell-heading h1 { margin-bottom: 0; }
 .archive-page { padding-top: 0; }
-.main-explore-panel { margin-top: 0; padding-top: 22px; padding-bottom: 26px; }
+.main-explore-panel { margin-top: 0; padding: 22px var(--archive-gutter) 26px; }
 .friends-explore { min-height: 0; padding-top: 22px; }
 
 /* An empty media slot still occupies the same column as a cover. */
@@ -891,12 +897,14 @@ body { font-family: var(--sans); }
 .mode-night .archive-row:hover, .mode-night .archive-row:focus-visible { background: #111c2f; }
 
 @media (max-width: 1000px) {
+  :root { --archive-gutter: 28px; }
   .archive-row, .archive-row.has-cover { grid-template-columns: 118px minmax(0, 1fr) 58px 15px; }
 }
 @media (max-width: 720px) {
-  .archive-shell-heading { padding: 30px 16px 22px; }
+  :root { --archive-gutter: 16px; }
+  .archive-shell-heading { padding: 30px var(--archive-gutter) 22px; }
   .archive-page, .archive-page.is-filtered-view { padding-top: 0; }
-  .main-explore-panel, .friends-explore { margin-top: 0; padding-top: 12px; }
+  .main-explore-panel, .friends-explore { margin-top: 0; padding: 12px var(--archive-gutter) 26px; }
   .archive-row, .archive-row.has-cover { grid-template-columns: 96px minmax(0, 1fr) 15px; min-height: 88px; }
   .archive-index { font-size: 17px; }
 }
