@@ -486,8 +486,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           <RecentPosts posts={filteredPosts.slice(0, 5)} hasFilter={Boolean(query || activeCategory || activeTag)} onOpen={openArticle} onClear={clearFilters} sectionRef={recentRef} />
         </section>}
         {surface !== 'town' && explorePanel && <ExplorePanel panel={explorePanel} categories={categories} tags={tags} posts={posts} activeCategory={activeCategory} activeTag={activeTag} onCategory={chooseMainCategory} onTag={chooseMainTag} />}
-        {surface === 'archive' && !explorePanel && <ArchiveView posts={filteredPosts} query={query} activeCategory={activeCategory} activeTag={activeTag} compact={false} onOpen={openArticle} />}
-        {surface !== 'town' && explorePanel && explorePanel !== 'friends' && <ArchiveView posts={filteredPosts} query={query} activeCategory={activeCategory} activeTag={activeTag} compact onOpen={openArticle} />}
+        {surface === 'archive' && !explorePanel && <ArchiveView posts={filteredPosts} compact={false} onOpen={openArticle} />}
+        {surface !== 'town' && explorePanel && explorePanel !== 'friends' && <ArchiveView posts={filteredPosts} compact onOpen={openArticle} />}
         {surface === 'article' && !explorePanel && selectedPost && <ArticleView post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onBack={returnFromArticle} onOpen={openArticle} related={posts.filter((post) => post.id !== selectedPost.id && (post.category === selectedPost.category || Boolean(selectedPost.series && post.series === selectedPost.series))).slice(0, 3)} />}
         {surface === 'article' && !explorePanel && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
@@ -522,7 +522,7 @@ function ArchiveHeading({ panel, postCount }: { panel?: ExplorePanel; postCount:
   return <header className="archive-heading archive-shell-heading"><div><span className="section-eyebrow">{eyebrow}</span><h1>{title}</h1></div></header>;
 }
 
-function ArchiveView({ posts, query, activeCategory, activeTag, compact, onOpen }: { posts: TownPost[]; query: string; activeCategory?: string; activeTag?: string; compact: boolean; onOpen: (id: string) => void }) {
+function ArchiveView({ posts, compact, onOpen }: { posts: TownPost[]; compact: boolean; onOpen: (id: string) => void }) {
   return <section className={`archive-page ${compact ? 'is-filtered-view' : ''}`}>
     <div className="archive-list" aria-live="polite">{posts.map((post, index) => <button key={post.id} className={`archive-row ${post.cover ? 'has-cover' : ''}`} onClick={() => onOpen(post.id)}>{post.cover ? <span className="archive-cover"><img src={post.cover} alt="" loading="lazy" /></span> : <span className="archive-index">{String(index + 1).padStart(2, '0')}</span>}<span className="archive-copy"><strong>{post.title}</strong><small>{post.description}</small><em>{post.category} · {post.tags.slice(0, 2).map((tag) => `#${tag}`).join('  ')}</em></span><time>{formatDate(post.date)}</time>{icon('arrow')}</button>)}</div>
     {!posts.length && <div className="archive-empty"><h2>这里暂时没有文章</h2><p>再次点击当前选项即可取消筛选，或者选择上方的其他分类与标签。</p></div>}
