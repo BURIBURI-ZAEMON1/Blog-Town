@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ElementType } from 'react';
 import type { SceneAnchor, TownPost } from './TownScene';
 import TownLoading from './TownLoading';
@@ -593,10 +593,100 @@ function ArticleContents({ headings, activeHeadingId }: { headings: ArticleHeadi
 
 function SeriesDirectory({ posts, selectedPostId, onOpenArticle }: { posts: TownPost[]; selectedPostId?: string; onOpenArticle: (id: string) => void }) { return <div className="series-directory"><span className="series-directory-label">当前系列 · {posts[0]?.series}</span>{posts.map((post, index) => <button key={post.id} className={post.id === selectedPostId ? 'is-current' : ''} onClick={() => onOpenArticle(post.id)}><b>{index + 1}:</b><span>{post.title}</span></button>)}</div>; }
 
+function liquidLightPath(stretch: number) {
+  const radius = 20;
+  const curve = radius * .5523;
+  const tail = stretch * 20;
+  const taper = curve * (1 - stretch * .9);
+  return `M ${radius} 0 C ${radius} ${-curve} ${curve} ${-radius} 0 ${-radius} C ${-curve} ${-radius} ${-radius - tail * .7} ${-taper} ${-radius - tail} 0 C ${-radius - tail * .7} ${taper} ${-curve} ${radius} 0 ${radius} C ${curve} ${radius} ${radius} ${curve} ${radius} 0 Z`;
+}
+
+function ExplorePill({ label, count, selected, onSelect }: { label: string; count?: number; selected: boolean; onSelect: () => void }) {
+  const gradientId = useId();
+  const shapeRef = useRef<SVGPathElement>(null);
+  const lightRef = useRef({ x: .5, y: .5, targetX: .5, targetY: .5, width: 1, height: 1, stretch: 0, frame: 0 });
+  useEffect(() => () => window.cancelAnimationFrame(lightRef.current.frame), []);
+
+  const followLight = (button: HTMLButtonElement) => {
+    const light = lightRef.current;
+    const dx = (light.targetX - light.x) * light.width;
+    const dy = (light.targetY - light.y) * light.height;
+    const distance = Math.hypot(dx, dy);
+    const stretch = Math.min(distance / 28, 1);
+    light.stretch += (stretch - light.stretch) * .32;
+    if (distance > 1) button.style.setProperty('--liquid-angle', `${Math.atan2(dy, dx)}rad`);
+    shapeRef.current?.setAttribute('d', liquidLightPath(light.stretch));
+    light.x += (light.targetX - light.x) * .2;
+    light.y += (light.targetY - light.y) * .2;
+    button.style.setProperty('--glass-x', `${light.x * 100}%`);
+    button.style.setProperty('--glass-y', `${light.y * 100}%`);
+    if (distance > .15 || light.stretch > .005) {
+      light.frame = window.requestAnimationFrame(() => followLight(button));
+    } else {
+      light.stretch = 0;
+      shapeRef.current?.setAttribute('d', liquidLightPath(0));
+      light.frame = 0;
+    }
+  };
+  const moveLight = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.pointerType !== 'mouse') return;
+    const button = event.currentTarget;
+    const bounds = button.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) / bounds.width;
+    const y = (event.clientY - bounds.top) / bounds.height;
+    button.style.setProperty('--tip-x', `${x * 100}%`);
+    button.style.setProperty('--tip-y', `${y * 100}%`);
+    const light = lightRef.current;
+    light.targetX = x;
+    light.targetY = y;
+    light.width = bounds.width;
+    light.height = bounds.height;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      window.cancelAnimationFrame(light.frame);
+      light.frame = 0;
+      light.stretch = 0;
+      light.x = x;
+      light.y = y;
+      shapeRef.current?.setAttribute('d', liquidLightPath(0));
+      button.style.setProperty('--glass-x', `${x * 100}%`);
+      button.style.setProperty('--glass-y', `${y * 100}%`);
+      button.style.removeProperty('--liquid-angle');
+    } else if (!light.frame) {
+      light.frame = window.requestAnimationFrame(() => followLight(button));
+    }
+  };
+  const resetLight = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const button = event.currentTarget;
+    const light = lightRef.current;
+    window.cancelAnimationFrame(light.frame);
+    light.x = light.y = light.targetX = light.targetY = .5;
+    light.stretch = 0;
+    light.frame = 0;
+    shapeRef.current?.setAttribute('d', liquidLightPath(0));
+    button.style.removeProperty('--glass-x');
+    button.style.removeProperty('--glass-y');
+    button.style.removeProperty('--tip-x');
+    button.style.removeProperty('--tip-y');
+    button.style.removeProperty('--liquid-angle');
+  };
+  const select = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      event.currentTarget.animate([
+        { transform: 'scale(1)' },
+        { transform: 'scale(.94)', offset: .33 },
+        { transform: 'scale(1.045)', offset: .68 },
+        { transform: 'scale(1)' },
+      ], { duration: 390, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+    onSelect();
+  };
+  return <button type="button" className={selected ? 'is-selected' : ''} aria-pressed={selected} onPointerMove={moveLight} onPointerLeave={resetLight} onClick={select}><svg className="explore-liquid" viewBox="-48 -48 96 96" aria-hidden="true"><defs><radialGradient id={gradientId} cx="57%" cy="50%" r="77%"><stop className="liquid-core" offset="0" /><stop className="liquid-body" offset=".4" /><stop className="liquid-tail" offset=".78" /><stop className="liquid-edge" offset="1" /></radialGradient></defs><path ref={shapeRef} d={liquidLightPath(0)} fill={`url(#${gradientId})`} /></svg><span>{label}</span>{count !== undefined && <b>{count}</b>}</button>;
+}
+
 function ExplorePanel({ panel, categories, tags, posts, activeCategory, activeTag, onCategory, onTag }: { panel: ExplorePanel; categories: string[]; tags: string[]; posts: TownPost[]; activeCategory?: string; activeTag?: string; onCategory: (value: string) => void; onTag: (value: string) => void }) {
   if (panel === 'friends') return <section className="main-explore-panel friends-explore"><div className="friends-explore-heading"><div><span className="section-eyebrow">FRIEND LINKS</span><h2>友邻</h2></div><div className="friends-ornament" aria-hidden="true"><i /><i /><i /><span>VISIT<br />THEIR<br />TOWNS</span></div></div>{friendLinks.length > 0 ? <div className="main-friends-list">{friendLinks.map((friend) => <a className="main-friend-row" href={friend.url} target="_blank" rel="noreferrer noopener" key={friend.id}><span className="friend-avatar"><img src={friend.avatar} alt="" loading="lazy" /></span><span><strong>{friend.nickname}</strong>{friend.description && <small>{friend.description}</small>}<em>{new URL(friend.url).hostname}</em></span>{icon('external')}</a>)}</div> : <div className="sidebar-empty">尚未配置友链。</div>}</section>;
-  if (panel === 'categories') return <section className="main-explore-panel"><span className="section-eyebrow">CATEGORIES</span><h2>分类</h2><div className="main-taxonomy">{categories.map((category) => <button key={category} className={activeCategory === category ? 'is-selected' : ''} aria-pressed={activeCategory === category} onClick={() => onCategory(category)}><span>{category}</span><b>{posts.filter((post) => post.category === category).length}</b>{icon('arrow')}</button>)}</div></section>;
-  return <section className="main-explore-panel"><span className="section-eyebrow">TAGS</span><h2>标签</h2><div className="main-tags">{tags.map((tag) => <button key={tag} className={activeTag === tag ? 'is-selected' : ''} aria-pressed={activeTag === tag} onClick={() => onTag(tag)}>#{tag}</button>)}</div></section>;
+  if (panel === 'categories') return <section className="main-explore-panel"><span className="section-eyebrow">CATEGORIES</span><h2>分类</h2><div className="explore-pills">{categories.map((category) => <ExplorePill key={category} label={category} count={posts.filter((post) => post.category === category).length} selected={activeCategory === category} onSelect={() => onCategory(category)} />)}</div></section>;
+  return <section className="main-explore-panel"><span className="section-eyebrow">TAGS</span><h2>标签</h2><div className="explore-pills">{tags.map((tag) => <ExplorePill key={tag} label={`#${tag}`} selected={activeTag === tag} onSelect={() => onTag(tag)} />)}</div></section>;
 }
 
 function MiniTownMap({ post, layout }: { post: TownPost; layout: TownLayout }) {

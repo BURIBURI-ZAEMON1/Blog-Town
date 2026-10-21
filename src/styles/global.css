@@ -91,14 +91,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .sidebar-spacer { flex: 1 0 22px; }
 .main-explore-panel { margin: 34px 42px 0; padding: 22px 0 27px; border-top: 1px solid var(--line-strong); border-bottom: 1px solid var(--line); }
 .main-explore-panel h2 { margin: 9px 0 20px; font-family: var(--serif); font-size: clamp(28px, 3vw, 42px); letter-spacing: -.08em; }
-.main-taxonomy { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
-.main-taxonomy button { display: grid; grid-template-columns: 1fr auto 16px; align-items: center; gap: 12px; padding: 14px 13px; border: 1px solid var(--line); background: color-mix(in srgb, var(--paper-3) 45%, transparent); color: var(--ink); text-align: left; cursor: pointer; }
-.main-taxonomy button:hover { border-color: var(--line-strong); background: color-mix(in srgb, var(--paper-3) 80%, transparent); }
-.main-taxonomy b { color: var(--muted-2); font-family: var(--mono); font-size: 9px; font-weight: 400; }
-.main-taxonomy .icon { color: var(--sage); width: 14px; }
-.main-tags { display: flex; flex-wrap: wrap; gap: 9px; }
-.main-tags button { padding: 10px 12px; border: 1px solid var(--line-strong); background: transparent; color: var(--sage); cursor: pointer; font-family: var(--mono); font-size: 10px; }
-.main-tags button:hover { background: var(--paper-3); color: var(--ink); }
 .main-friends-list { max-width: 620px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; }
 .main-friend-row { display: grid; grid-template-columns: 28px minmax(0,1fr) 14px; gap: 9px; align-items: center; padding: 11px; border-bottom: 1px solid var(--line); color: inherit; text-decoration: none; }
 .main-friend-row:hover { background: color-mix(in srgb, var(--paper-3) 70%, transparent); }
@@ -235,9 +227,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .archive-empty { padding: 64px 20px 78px; border-top: 1px solid var(--line-strong); text-align: center; }
 .archive-empty h2 { margin: 0 0 9px; color: var(--ink); font-family: var(--serif); font-size: 24px; }
 .archive-empty p { margin: 0; color: var(--muted); font-family: var(--serif); font-size: 12px; }
-.main-taxonomy button.is-selected, .main-taxonomy button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--sage) 72%, var(--line-strong)); background: color-mix(in srgb, var(--sage) 14%, var(--paper-3)); box-shadow: inset 3px 0 0 var(--sage); }
-.main-taxonomy button.is-selected .icon { transform: rotate(180deg); }
-.main-tags button.is-selected, .main-tags button[aria-pressed="true"] { border-color: var(--sage); background: color-mix(in srgb, var(--sage) 18%, var(--paper-3)); color: var(--ink); box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--sage) 72%, transparent); }
 
 /* Friend links become their own archive surface instead of sitting above posts. */
 .friends-explore { min-height: calc(100dvh - 102px); padding: 42px 0 72px; border-bottom: 0; }
@@ -291,10 +280,6 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .mode-night .archive-row strong,
 .mode-night .related-posts strong,
 .mode-night .archive-empty h2 { color: #fff7e8; text-shadow: 0 1px 0 rgba(0, 0, 0, .28); }
-.mode-night .main-taxonomy button,
-.mode-night .main-tags button { color: #e9eddf; }
-.mode-night .main-taxonomy button.is-selected,
-.mode-night .main-tags button.is-selected { color: #fff7e8; background: color-mix(in srgb, var(--sage) 22%, var(--paper-3)); }
 .mode-night .article-contents button.is-active { color: #fff7e8; }
 .mode-night .article-contents button.is-active::after { background: #9bc7a7; opacity: .9; }
 
@@ -745,7 +730,7 @@ body { font-family: var(--sans); }
   letter-spacing: 0;
 }
 .nav-item, .sidebar-taxonomy button, .top-search input,
-.main-taxonomy button, .main-tags button, .mode-button {
+.explore-pills button, .mode-button {
   font-family: var(--sans);
   letter-spacing: 0;
 }
@@ -774,6 +759,94 @@ body { font-family: var(--sans); }
 .archive-heading h1, .article-layout article h1 { font-family: var(--expressive); letter-spacing: 0; line-height: 1.25; font-weight: 400; }
 .archive-mark b { font-family: var(--accent); font-size: 28px; font-style: italic; font-weight: 500; }
 .archive-row strong { font-size: 17px; line-height: 1.45; font-weight: 700; }
+.explore-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.explore-pills button {
+  --glass-x: 50%;
+  --glass-y: 50%;
+  --tip-x: 50%;
+  --tip-y: 50%;
+  --liquid-angle: 0rad;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  min-height: 46px;
+  max-width: 100%;
+  padding: 9px 20px;
+  border: 1px solid rgba(180, 198, 221, .66);
+  border-radius: 999px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .92), rgba(226, 237, 250, .43) 68%, rgba(255, 255, 255, .8));
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, .98), inset 0 -2px 4px rgba(83, 123, 176, .08), 0 4px 12px rgba(36, 69, 114, .08);
+  color: #263b59;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 1.35;
+  text-align: center;
+  transition: border-color .25s ease, box-shadow .25s ease, background .25s ease;
+}
+.explore-pills button > span, .explore-pills button > b { position: relative; z-index: 1; }
+.explore-pills button b { color: #6683a7; font-family: var(--mono); font-size: 11px; font-weight: 400; }
+.explore-liquid {
+  position: absolute;
+  left: var(--glass-x);
+  top: var(--glass-y);
+  width: 96px;
+  height: 96px;
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .18s ease;
+  transform: translate(-50%, -50%) rotate(var(--liquid-angle));
+  filter: blur(1.3px);
+}
+.explore-liquid .liquid-core { stop-color: #fff; stop-opacity: .98; }
+.explore-liquid .liquid-body { stop-color: #a7cdf6; stop-opacity: .78; }
+.explore-liquid .liquid-tail { stop-color: #91bdf0; stop-opacity: .35; }
+.explore-liquid .liquid-edge { stop-color: #c9e2ff; stop-opacity: 0; }
+.explore-pills button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle 9px at var(--tip-x) var(--tip-y), rgba(255, 255, 255, .72), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.explore-pills button.is-selected {
+  border-color: rgba(83, 142, 219, .65);
+  background: linear-gradient(145deg, rgba(228, 241, 255, .96), rgba(187, 215, 250, .62) 70%, rgba(246, 251, 255, .95));
+  box-shadow: inset 0 1px 1px #fff, inset 0 -3px 7px rgba(35, 104, 204, .13), 0 5px 16px rgba(37, 99, 235, .13);
+  color: #174c9b;
+}
+.explore-pills button.is-selected b { color: #366eb5; }
+.mode-night .explore-pills button {
+  border-color: rgba(137, 173, 220, .34);
+  background: linear-gradient(145deg, rgba(55, 76, 109, .62), rgba(24, 41, 70, .7) 68%, rgba(44, 65, 99, .6));
+  box-shadow: inset 0 1px 1px rgba(227, 242, 255, .23), inset 0 -2px 4px rgba(0, 10, 29, .22), 0 5px 18px rgba(0, 0, 0, .18);
+  color: #e5f0ff;
+}
+.mode-night .explore-pills button b { color: #a6c2e7; }
+.mode-night .explore-liquid .liquid-core { stop-color: #d8efff; stop-opacity: .8; }
+.mode-night .explore-liquid .liquid-body { stop-color: #5da9f5; stop-opacity: .65; }
+.mode-night .explore-liquid .liquid-tail { stop-color: #5b9fe6; stop-opacity: .4; }
+.mode-night .explore-liquid .liquid-edge { stop-color: #477bbd; stop-opacity: 0; }
+.mode-night .explore-pills button.is-selected {
+  border-color: rgba(143, 198, 255, .7);
+  background: linear-gradient(145deg, rgba(66, 119, 182, .8), rgba(31, 77, 143, .8) 70%, rgba(60, 103, 165, .75));
+  box-shadow: inset 0 1px 1px rgba(240, 249, 255, .4), inset 0 -3px 7px rgba(3, 23, 58, .28), 0 5px 18px rgba(23, 79, 157, .27);
+  color: #fff;
+}
+@media (hover: hover) and (pointer: fine) {
+  .explore-pills button:hover .explore-liquid, .explore-pills button:hover::after { opacity: 1; }
+}
+@media (max-width: 720px) { .explore-pills { gap: 10px; } .explore-pills button { min-height: 44px; padding: 9px 17px; font-size: 13px; } }
 .article-heading-row h2, .article-heading-row h3,
 .article-heading-row h4, .article-heading-row h5,
 .article-heading-row h6 { letter-spacing: 0; font-weight: 700; }
