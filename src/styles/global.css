@@ -102,7 +102,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .series-directory button:hover, .series-directory button.is-current { background: rgba(255,255,255,.45); }
 .series-directory b { color: var(--gold); font-family: var(--mono); font-size: 9px; font-weight: 500; }
 .series-directory span { overflow: hidden; color: var(--ink); font-family: var(--serif); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.article-location { display: block; height: 166px; margin: 13px 0 14px; overflow: hidden; border: 1px solid var(--line-strong); background: #aebd98; }
+.article-location { display: block; aspect-ratio: 1; height: auto; margin: 13px 0 14px; overflow: hidden; border: 1px solid var(--line-strong); background: transparent; }
 .article-location::after { display: none; }
 .article-location svg { display: block; width: 100%; height: 100%; }
 .mini-map-ground { fill: #b5c591; }
@@ -635,7 +635,7 @@ body { font-family: var(--sans); }
 
 .recent-posts, .archive-toolbar, .archive-row, .article-footer, .article-contents, .related-posts,
 .main-explore-panel, .article-location { border-color: transparent; }
-.recent-card, .archive-row, .main-friend-row, .article-location { background: #f8fafc; box-shadow: none; }
+.recent-card, .archive-row, .main-friend-row { background: #f8fafc; box-shadow: none; }
 .recent-card:hover { background: #eff6ff; }
 .card-bottom, .tooltip-meta, .tooltip-tags { color: #2563eb; }
 
@@ -662,7 +662,7 @@ body { font-family: var(--sans); }
 .mode-night .sidebar-taxonomy button:hover, .mode-night .sidebar-taxonomy button.is-selected,
 .mode-night .sidebar-post:hover, .mode-night .sidebar-post.is-hovered, .mode-night .friend-row:hover,
 .mode-night .series-directory button:hover, .mode-night .series-directory button.is-current,
-.mode-night .recent-card, .mode-night .archive-row, .mode-night .main-friend-row, .mode-night .article-location { background: #111c2f; }
+.mode-night .recent-card, .mode-night .archive-row, .mode-night .main-friend-row { background: #111c2f; }
 .mode-night .recent-card:hover { background: #172642; }
 .mode-night .top-search input::placeholder, .mode-night .top-search kbd, .mode-night .top-live,
 .mode-night .town-subline, .mode-night .town-seed, .mode-night .town-caption, .mode-night .recent-count { color: #64748b; }
