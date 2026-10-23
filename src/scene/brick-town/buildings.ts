@@ -1,6 +1,7 @@
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import type { Scene } from '@babylonjs/core/scene.js';
 import type { TownBuildingStyle, TownPlot } from '../../data/town-layout';
+import { SnowSurfaces } from './surfaces';
 import { BrickKit, COLORS as C, COURSE as H, STUD as S } from './kit';
 
 export const FLOOR_HEIGHT = H * 7;
@@ -110,6 +111,7 @@ export function buildHouse(scene: Scene, plot: TownPlot, mobile = false) {
   const root = new TransformNode(`house:${plot.id}`, scene);
   root.position.set(plot.x, GROUND_Y, plot.z);
   const kit = new BrickKit(scene, root, 'plastic', !mobile);
+  const snowSurfaces = new SnowSurfaces();
   const ids = plot.seriesPostIds ?? [plot.postId!];
   const style = palettes[plot.style ?? 'cottage'];
   // Six by five studs. Footprint is exactly the layout footprint, no root scaling.
@@ -167,7 +169,11 @@ export function buildHouse(scene: Scene, plot: TownPlot, mobile = false) {
   const topId = ids.at(-1)!;
   if (plot.roof === 'flat') {
     kit.brick(0, roofBase, 0, nx, nz, style.roof, H * 1.1, true, topId);
-    for (const x of [-w / 2 + S / 2, w / 2 - S / 2]) for (const z of [-d / 2 + S / 2, d / 2 - S / 2]) kit.brick(x, roofBase + H * 1.1, z, 1, 1, style.trim, H, true, topId);
+    for(let col=0;col<nx;col++)for(let row=0;row<nz;row++)snowSurfaces.column({ x:(col-(nx-1)/2)*S,y:roofBase+H*1.1+0.025,z:(row-(nz-1)/2)*S,width:S-0.01,depth:S-0.01 });
+    for (const x of [-w / 2 + S / 2, w / 2 - S / 2]) for (const z of [-d / 2 + S / 2, d / 2 - S / 2]) {
+      kit.brick(x, roofBase + H * 1.1, z, 1, 1, style.trim, H, true, topId);
+      snowSurfaces.column({ x,y:roofBase+H*2.1+0.025,z,width:S-0.01,depth:S-0.01 });
+    }
   } else {
     // Gable and hip roofs use different silhouettes while keeping all bricks
     // within the reserved plot envelope.
@@ -176,13 +182,16 @@ export function buildHouse(scene: Scene, plot: TownPlot, mobile = false) {
       const rw = plot.roof === 'hip' ? Math.max(1, nx - level * 2) : Math.max(1, nx - level * 2);
       const rd = plot.roof === 'hip' ? Math.max(1, nz - level * 2) : nz;
       for (let col = 0; col < rw; col++) for (let row = 0; row < rd; row++) {
-        kit.brick((col - (rw - 1) / 2) * S, roofBase + level * H * 1.1, (row - (rd - 1) / 2) * S, 1, 1, (row + col) % 5 === 0 ? style.accent : style.roof, H * 1.1, true, topId);
+        const x=(col-(rw-1)/2)*S,z=(row-(rd-1)/2)*S;
+        kit.brick(x, roofBase + level * H * 1.1, z, 1, 1, (row + col) % 5 === 0 ? style.accent : style.roof, H * 1.1, true, topId);
+        snowSurfaces.column({ x,y:roofBase+(level+1)*H*1.1+0.025,z,width:S-0.01,depth:S-0.01 });
       }
     }
   }
   for (let i = 0; i < 4; i++) kit.brick(w * 0.25, roofBase + i * H, -d * 0.25, 1, 1, C.sand, H, i === 3, topId);
   kit.brick(w * 0.25, roofBase + H * 4, -d * 0.25, 1, 1, C.ivory, H / 3, false, topId);
+  snowSurfaces.add({ x:w*0.25,y:roofBase+H*4+H/3,z:-d*0.25,width:S-0.02,depth:S-0.02 });
   addSpecialDetails(kit, plot.style ?? 'cottage', topId, w, d, roofBase, style);
   const meshes = kit.flush(`house:${plot.id}`);
-  return { root, meshes, plot, ids, roofY: roofBase + H * 4 };
+  return { root, meshes, plot, ids, roofY: roofBase + H * 4, snowSurfaces: snowSurfaces.items.map(surface=>({...surface,parent:root,postId:topId})) };
 }

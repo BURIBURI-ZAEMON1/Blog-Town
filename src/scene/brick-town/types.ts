@@ -1,5 +1,6 @@
 import type { TownLayout } from '../../data/town-layout';
 import type { ArticleSection } from '../../lib/markdown';
+import type { Season } from '../../data/town-seasons';
 export type TownPost = {
   id: string;
   townId: string;
@@ -32,6 +33,7 @@ export type TownSceneProps = {
   categoryPreview?: boolean;
   tagPreview?: boolean;
   colorMode: 'day' | 'night';
+  season: Season;
   reducedMotion: boolean;
   onHoverPost: (id?: string, anchor?: SceneAnchor) => void;
   onResolvePostAnchor: (id: string, anchor: SceneAnchor) => void;

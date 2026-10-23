@@ -1148,3 +1148,41 @@ body { font-family: var(--sans); }
   .recent-grid { grid-template-columns: minmax(0, 1fr); }
   .recent-card { height: 188px; min-height: 188px; }
 }
+
+/* The season menu shares the existing, quiet toolbar rather than covering the map. */
+.season-control { display: inline-flex; align-items: center; gap: 7px; color: #7c786c; flex-shrink: 0; font-family: var(--mono); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.season-control > .icon:first-of-type { width: 16px; height: 16px; color: #8b6339; }
+.season-control > .icon:last-child { width: 10px; height: 10px; transform: rotate(90deg); pointer-events: none; margin-left: -11px; }
+.season-control select { appearance: none; min-height: 30px; width: 68px; padding: 0 12px 0 0; border: 0; outline: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.season-control select:focus, .season-control select:focus-visible { outline: 0; box-shadow: none; }
+.season-control option { background: var(--paper); color: var(--ink); }
+.mode-night .season-control { color: #c3d0e2; }
+.mode-night .season-control > .icon:first-of-type { color: #edc78b; }
+@media (max-width: 1100px) { .top-live { display: none; } }
+@media (max-width: 720px) {
+  .topnav-actions { gap: 12px; }
+  .season-control { gap: 7px; }
+  .season-control select { min-height: 30px; width: 68px; }
+}
+
+.mode-button { flex-shrink: 0; white-space: nowrap; }
+@media (max-width: 420px) {
+  .topnav-actions { gap: 9px; }
+  .topnav-actions .avatar-mini { display: none; }
+}
+
+@media (max-width: 360px) { .mode-button span { display: none; } }
+@media (min-width: 721px) and (max-width: 1200px) {
+  .topnav { grid-template-columns: 110px minmax(100px, 1fr) auto; gap: 16px; padding-inline: 24px; }
+  .top-live { display: none; }
+}
+@media (max-width: 360px) {
+  .top-wordmark { font-size: 16px; }
+  .topnav-actions { gap: 6px; }
+  .season-control > .icon:first-of-type { display: none; }
+}
+@media (min-width: 721px) and (max-width: 900px) {
+  .town-caption { flex-wrap: wrap; gap: 8px 14px; }
+  .town-caption > span, .town-caption button { white-space: nowrap; }
+  .town-caption .caption-spacer { display: none; }
+}

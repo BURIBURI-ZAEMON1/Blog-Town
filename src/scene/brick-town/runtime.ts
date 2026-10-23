@@ -7,11 +7,9 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { Engine } from '@babylonjs/core/Engines/engine.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration.js';
-import { CreateLineSystem } from '@babylonjs/core/Meshes/Builders/linesBuilder.js';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial.js';
 import { Scene } from '@babylonjs/core/scene.js';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator.js';
-import { VertexBuffer } from '@babylonjs/core/Buffers/buffer.js';
 // Scene.pick is an optional Babylon extension; this side-effect registration is
 // required after switching from the barrel import to tree-shaken modules.
 import '@babylonjs/core/Culling/ray.js';
@@ -19,12 +17,15 @@ import { BOARD, buildWorld, randomFor } from './world';
 import { buildHouse, FLOOR_HEIGHT, GROUND_Y } from './buildings';
 import { buildMinifig } from './minifig';
 import { createLife, tickLife, type Citizen } from './life';
-import { weatherIsRainy } from '../../data/town-rain';
+import { weatherIsPrecipitating } from '../../data/town-weather';
+import { SEASON_PROFILES } from '../../data/town-seasons';
+import { createSeasonController } from './seasons';
+import { createWeatherController } from './weather';
 import type { TownLayout } from '../../data/town-layout';
 import type { TownSceneProps } from './types';
-import { clampToPanBounds, createRainField, getCameraPanBounds, getDragPanDelta } from './view';
+import { clampToPanBounds, getCameraPanBounds, getDragPanDelta } from './view';
 
-export type SceneState = Pick<TownSceneProps,'activePostId'|'hoveredPostId'|'query'|'category'|'tag'|'colorMode'|'reducedMotion'>;
+export type SceneState = Pick<TownSceneProps,'activePostId'|'hoveredPostId'|'query'|'category'|'tag'|'colorMode'|'reducedMotion'|'season'>;
 export type SceneCallbacks = Pick<TownSceneProps,'onHoverPost'|'onResolvePostAnchor'|'onSelectPost'>;
 const color=(hex:string)=>Color3.FromHexString(hex);
 
@@ -80,10 +81,14 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const world=buildWorld(scene,layout,mobile);
   const houses=layout.plots.map(p=>buildHouse(scene,p,mobile));
   const houseMeshes=houses.flatMap(h=>h.meshes);
+  const seasons=createSeasonController({scene,world,mobile,seed:layout.seed,surfaces:[...world.snowSurfaces,...houses.flatMap(h=>h.snowSurfaces)]});
+  const weather=createWeatherController(scene,layout.seed,mobile);
+  seasons.set(initial.season,initial.reducedMotion);
+  let seasonChanges=0;
   // Terrain plates cannot cast a useful shadow onto themselves. Excluding that
   // multi-million-instance surface cuts most shadow-map geometry while houses,
   // trees, props and citizens retain their natural shadows.
-  for(const m of [...world.shadowCasters,...houseMeshes])shadows.addShadowCaster(m);
+  for(const m of [...world.shadowCasters,...houseMeshes,...seasons.meshes.filter(m=>!m.metadata.thinInstances)])shadows.addShadowCaster(m);
   for(const m of [...world.meshes,...houseMeshes]){m.computeWorldMatrix(true);m.freezeWorldMatrix();}
   let glow:import('@babylonjs/core/Layers/glowLayer.js').GlowLayer|undefined;
   let highlights:import('@babylonjs/core/Layers/highlightLayer.js').HighlightLayer|undefined;
@@ -101,7 +106,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     glow=new layers.GlowLayer('warm-window-scatter',scene,{mainTextureRatio:mobile?0.24:0.35});glow.intensity=0.22;
     // Empty include lists glow every emissive object. Explicit exclusions prevent
     // filter outlines from turning whole houses into night lights.
-    for(const m of world.meshes)glow.addExcludedMesh(m);
+    for(const m of [...world.meshes,...seasons.meshes])glow.addExcludedMesh(m);
     for(const m of houseMeshes)if(!m.metadata.glass)glow.addExcludedMesh(m);
     highlights=new highlightModule.HighlightLayer('article-floor-highlight',scene,{mainTextureRatio:mobile?0.32:0.5});
     highlights.blurHorizontalSize=mobile?0.35:0.55;highlights.blurVerticalSize=mobile?0.35:0.55;highlights.innerGlow=false;
@@ -121,27 +126,23 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const postMap=new Map(posts.map(p=>[p.id,p]));
   let state={...initial};let frames=0;let elapsed=0;
   let inView=true,visible=!document.hidden,lastFrame=0;
-  let weatherSlot=Math.floor(Date.now()/900000),rainy=weatherIsRainy(layout.seed,weatherSlot);
+  let weatherSlot=Math.floor(Date.now()/900000),rainy=weatherIsPrecipitating(layout.seed,weatherSlot);
   let citizens:Citizen[]=[],figures:ReturnType<typeof buildMinifig>[]=[];
-  const rainRandom=randomFor(layout.seed+':rain');
-  // Match rain density to the expanded board rather than the old town-center
-  // rectangle. The small margin keeps drops visible right up to every edge.
-  const drops=createRainField(rainRandom,mobile?280:700,BOARD);
-  const linePairs=drops.map(d=>[new Vector3(d.x,d.y,d.z),new Vector3(d.x-0.12,d.y-0.65,d.z-0.04)]);
-  const rainMesh=CreateLineSystem('rain',{lines:linePairs,updatable:true},scene);
-  const rainPositions=new Float32Array(drops.length*6);
-  rainMesh.color=color('#bad4dc');rainMesh.alpha=0.42;rainMesh.isPickable=false;
   function populate() {
-    for(const f of figures)f.root.dispose(false,false);
     citizens=createLife(layout,state.colorMode==='night',rainy,randomFor(`${layout.seed}:${state.colorMode}:${weatherSlot}`));
-    figures=citizens.map((p,i)=>buildMinifig(scene,p.role,i,state.colorMode==='night',rainy));
+    rebuildFigures();
     // Minifigures are tiny at the map scale; omitting their animated shadow-map
     // passes removes most per-frame shadow draw calls with no visible town loss.
   }
+  function rebuildFigures() {
+    for(const figure of figures)figure.root.dispose(false,false);
+    figures=citizens.map((p,i)=>buildMinifig(scene,p.role,i,state.colorMode==='night',rainy&&state.season!=='winter'));
+  }
   function lighting() {
-    const night=state.colorMode==='night';
+    const night=state.colorMode==='night',profile=SEASON_PROFILES[state.season];
     scene.clearColor=Color4.FromHexString(night?'#0b1220ff':'#ffffffff');
-    sun.intensity=night?0.45:rainy?0.75:1.5;sun.diffuse=color(night?'#9cbce8':rainy?'#dbe5e8':'#fff0d2');
+    sun.intensity=night?0.45:rainy?0.75:1.5;sun.diffuse=color(night?'#9cbce8':rainy?'#dbe5e8':profile.lighting.sun);
+    hemi.diffuse=color(profile.lighting.sky);
     hemi.intensity=night?0.18:rainy?0.40:0.25;scene.environmentIntensity=night?0.20:0.5;
     scene.imageProcessingConfiguration.exposure=night?0.8:0.82;
     for(const m of houseMeshes)if(m.metadata.glass){
@@ -149,13 +150,22 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       mat.albedoColor=color(night?'#edbd6d':'#5e97a4');
     }
     for(const m of world.lamps){const mat=m.material as PBRMaterial;mat.emissiveColor=night?color('#ffba5b'):Color3.Black();mat.emissiveIntensity=night?1.5:0;}
-    rainMesh.setEnabled(rainy);if(glow)glow.isEnabled=night;
+    weather.set(profile.precipitation,rainy,state.reducedMotion);if(glow)glow.isEnabled=night;
   }
   function update(next:SceneState) {
+    const seasonChanged=next.season!==state.season;
     const rebuildPeople=next.colorMode!==state.colorMode;
-    state={...next};if(rebuildPeople){populate();lighting();}
+    const environmentChanged=rebuildPeople||seasonChanged||next.reducedMotion!==state.reducedMotion;
+    if(seasonChanged) {
+      for(const mesh of seasons.meshes){highlights?.removeMesh(mesh);glow?.removeExcludedMesh(mesh);shadows.removeShadowCaster(mesh);}
+      seasons.set(next.season,next.reducedMotion);seasonChanges++;
+      for(const mesh of seasons.meshes){glow?.addExcludedMesh(mesh);if(!mesh.metadata.thinInstances)shadows.addShadowCaster(mesh);}
+      shadows.getShadowMap()?.resetRefreshCounter();
+    }
+    state={...next};if(rebuildPeople)populate();else if(seasonChanged)rebuildFigures();if(environmentChanged)lighting();
+    if(state.reducedMotion)seasons.tick(0,true);
     const needle=state.query.trim().toLowerCase();let hasHighlight=false;
-    for(const mesh of houseMeshes){
+    for(const mesh of [...houseMeshes,...seasons.articleMeshes]){
       const post=postMap.get(mesh.metadata.postId);if(!post)continue;
       const matches=!!(needle||state.category||state.tag)&&(!needle||[post.title,post.description,post.category,...post.tags,post.series??''].join(' ').toLowerCase().includes(needle))&&(!state.category||post.category===state.category)&&(!state.tag||post.tags.includes(state.tag));
       const direct=post.id===state.hoveredPostId||post.id===state.activePostId;
@@ -260,8 +270,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const resize=new ResizeObserver(()=>{fit();if(state.hoveredPostId)anchor(state.hoveredPostId);});resize.observe(canvas.parentElement!);
   let lastDiagnostics=0,slowRenderFrames=0;
   function publishDiagnostics(now:number){
-    canvas.dataset.ready='true';canvas.dataset.frames=String(frames);canvas.dataset.weather=rainy?'rain':'clear';canvas.dataset.renderer=engine.webGLVersion===2?'webgl2':'webgl1';
-    canvas.dataset.cameraX=camera.target.x.toFixed(2);canvas.dataset.cameraZ=camera.target.z.toFixed(2);canvas.dataset.zoom=zoom.toFixed(3);canvas.dataset.rainDrops=String(drops.length);
+    canvas.dataset.ready='true';canvas.dataset.frames=String(frames);canvas.dataset.weather=rainy?weather.kind:'clear';canvas.dataset.season=state.season;canvas.dataset.colorMode=state.colorMode;canvas.dataset.reducedMotion=String(state.reducedMotion);canvas.dataset.seasonChanges=String(seasonChanges);canvas.dataset.seasonCover=String(seasons.coverCount);canvas.dataset.seasonTransition=String(seasons.transitioning);canvas.dataset.precipitationAnimated=String(weather.animated);canvas.dataset.renderer=engine.webGLVersion===2?'webgl2':'webgl1';
+    canvas.dataset.cameraX=camera.target.x.toFixed(2);canvas.dataset.cameraZ=camera.target.z.toFixed(2);canvas.dataset.zoom=zoom.toFixed(3);canvas.dataset.rainDrops=String(weather.count);
     canvas.dataset.sceneMeshes=String(scene.meshes.length);canvas.dataset.sceneMaterials=String(scene.materials.length);canvas.dataset.sceneVertices=String(scene.getTotalVertices());canvas.dataset.thinInstances=String(scene.meshes.reduce((sum,mesh)=>sum+('thinInstanceCount' in mesh?Number(mesh.thinInstanceCount):0),0));lastDiagnostics=now;
   }
   function render(){
@@ -269,7 +279,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     const now=performance.now();if(now-lastFrame<(mobile?1000/24:1000/30))return;
     const dt=Math.min(0.05,lastFrame?(now-lastFrame)/1000:0.016);lastFrame=now;elapsed+=dt;
     const slot=Math.floor(Date.now()/900000);
-    if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsRainy(layout.seed,slot);populate();lighting();}
+    if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsPrecipitating(layout.seed,slot);populate();lighting();}
     if(!state.reducedMotion)tickLife(citizens,dt,layout);
     citizens.forEach((p,i)=>{
       const f=figures[i];f.root.position.set(p.position.x,0.10,p.position.z);
@@ -286,8 +296,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       const edge=Math.min(p.position.x-BOARD.minX,BOARD.maxX-p.position.x,p.position.z-BOARD.minZ,BOARD.maxZ-p.position.z);
       for(const m of f.meshes)m.visibility=p.opacity*Math.max(0,Math.min(1,edge/0.5));
     });
-    if(rainy&&!state.reducedMotion){for(let i=0;i<drops.length;i++){const d=drops[i];d.y-=dt*d.speed;if(d.y<0.1)d.y+=13;const offset=i*6;rainPositions[offset]=d.x;rainPositions[offset+1]=d.y;rainPositions[offset+2]=d.z;rainPositions[offset+3]=d.x-0.12;rainPositions[offset+4]=d.y-0.65;rainPositions[offset+5]=d.z-0.04;}rainMesh.updateVerticesData(VertexBuffer.PositionKind,rainPositions,false,false);}
-    for(const m of world.glints)m.visibility=0.65+Math.sin(elapsed*1.5)*0.15;
+    weather.tick(dt);seasons.tick(dt,state.reducedMotion);
+    if(!state.reducedMotion&&state.season!=='winter')for(const m of world.glints)m.visibility=0.65+Math.sin(elapsed*1.5)*0.15;
     const renderStarted=performance.now();scene.render();const renderCost=performance.now()-renderStarted;frames++;
     if(frames===1){onFirstFrame?.();window.setTimeout(()=>{void initVisualEffects();},mobile?350:0);}
     if(ao&&renderCost>55){slowRenderFrames++;if(slowRenderFrames>=4){ao.dispose();ao=undefined;canvas.dataset.adaptiveAo='off';}}else slowRenderFrames=Math.max(0,slowRenderFrames-1);
@@ -302,6 +312,6 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     update,anchor,
     zoom(amount:number){applyZoom(zoom+amount);},
     home(){zoom=defaultZoom;camera.target.set(0,0.2,0);fit();onZoomChange?.(zoom,defaultZoom);},
-    dispose(){disposed=true;engine.stopRenderLoop(render);resize.disconnect();observer.disconnect();document.removeEventListener('visibilitychange',onVisibility);canvas.removeEventListener('pointermove',onMove);canvas.removeEventListener('pointerleave',onLeave);canvas.removeEventListener('pointerdown',onDown);canvas.removeEventListener('pointerup',onUp);canvas.removeEventListener('pointercancel',onCancel);pointers.clear();pinch=undefined;down=undefined;ao?.dispose();scene.dispose();engine.dispose();},
+    dispose(){disposed=true;engine.stopRenderLoop(render);resize.disconnect();observer.disconnect();document.removeEventListener('visibilitychange',onVisibility);canvas.removeEventListener('pointermove',onMove);canvas.removeEventListener('pointerleave',onLeave);canvas.removeEventListener('pointerdown',onDown);canvas.removeEventListener('pointerup',onUp);canvas.removeEventListener('pointercancel',onCancel);pointers.clear();pinch=undefined;down=undefined;ao?.dispose();seasons.dispose();weather.dispose();scene.dispose();engine.dispose();},
   };
 }

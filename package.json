@@ -9,10 +9,11 @@
     "preview": "astro preview",
     "check": "astro check",
     "verify:spatial": "node scripts/verify-town-spatial.mjs",
-    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:spatial && npm run verify:life && npm run verify:brick",
+    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:spatial && npm run verify:life && npm run verify:brick && npm run verify:seasons",
     "verify:content": "node scripts/verify-content.mjs",
     "verify:life": "node scripts/verify-town-life.mjs",
-    "verify:brick": "node scripts/verify-brick-town.mjs"
+    "verify:brick": "node scripts/verify-brick-town.mjs",
+    "verify:seasons": "node scripts/verify-town-seasons.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.4",

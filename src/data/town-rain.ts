@@ -1,16 +1,12 @@
+import { createPrecipitationField, weatherIsPrecipitating, PRECIPITATION_PROBABILITY } from './town-weather';
+export { createPrecipitationField, weatherIsPrecipitating };
+export const RAIN_PROBABILITY = PRECIPITATION_PROBABILITY;
 export const RAIN_BOTTOM = 0.08;
 export const RAIN_SPAN = 21;
 export const RAIN_WIND_X = 0.7;
 export const RAIN_WIND_Z = 0.18;
-export const RAIN_PROBABILITY = 0.3;
 
-const hash = (value: string) => [...value].reduce((sum, char) => (sum * 33 + char.charCodeAt(0)) >>> 0, 5381);
-
-export const weatherIsRainy = (seed: string, slot: number) => {
-  let state = hash(`${seed}:weather:${slot}`);
-  state = (1664525 * state + 1013904223) >>> 0;
-  return state / 4294967296 < RAIN_PROBABILITY;
-};
+export const weatherIsRainy = weatherIsPrecipitating;
 
 const positiveModulo = (value: number, divisor: number) => ((value % divisor) + divisor) % divisor;
 

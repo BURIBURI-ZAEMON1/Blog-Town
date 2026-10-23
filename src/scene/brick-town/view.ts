@@ -1,3 +1,5 @@
+import { createPrecipitationField } from '../../data/town-weather';
+
 export type BoardBounds = { minX: number; maxX: number; minZ: number; maxZ: number };
 export type PanBounds = { minX: number; maxX: number; minZ: number; maxZ: number };
 
@@ -8,18 +10,7 @@ export const createRainField = (
   count: number,
   board: BoardBounds,
   margin = 1.8,
-): RainDrop[] => {
-  const minX = board.minX - margin;
-  const maxX = board.maxX + margin;
-  const minZ = board.minZ - margin;
-  const maxZ = board.maxZ + margin;
-  return Array.from({ length: count }, () => ({
-    x: minX + random() * (maxX - minX),
-    z: minZ + random() * (maxZ - minZ),
-    y: 1 + random() * 13,
-    speed: 6 + random() * 4,
-  }));
-};
+): RainDrop[] => createPrecipitationField(random, count, board, 'rain', margin);
 
 export const getCameraPanBounds = (
   board: BoardBounds,
