@@ -1137,3 +1137,55 @@ body { font-family: var(--sans); }
   .town-zoom-townmark,
   .town-zoom-scale-pointer { transition: none; }
 }
+
+/* Recent notes follow the archive's quiet paper/blue interaction language. */
+.recent-posts { background: var(--paper); }
+.recent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; columns: auto; }
+.recent-card,
+.recent-card.card-1,
+.recent-card.card-2,
+.recent-card.card-3 {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 188px;
+  min-height: 188px;
+  margin: 0;
+  padding: 18px 20px;
+  overflow: hidden;
+  border: 1px solid #e5edf7;
+  border-radius: 6px;
+  background: var(--paper);
+  box-shadow: none;
+  transform: none;
+  transition: background-color .2s ease, border-color .2s ease;
+}
+.recent-card:hover,
+.recent-card.card-1:hover,
+.recent-card.card-2:hover,
+.recent-card.card-3:hover { background: #eff6ff; border-color: #d9e8fa; box-shadow: none; transform: none; }
+.recent-card .card-top { flex: 0 0 auto; gap: 10px; color: #64748b; }
+.recent-card .card-top span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-card .card-top span:last-child { flex: 0 0 auto; }
+.recent-card strong { overflow: hidden; margin-top: 18px; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+.recent-card p { display: -webkit-box; overflow: hidden; flex: 0 0 auto; margin: 6px 0 0; color: #475569; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.recent-card .card-bottom { flex: 0 0 auto; min-width: 0; margin-top: auto; color: #2563eb; white-space: nowrap; }
+.recent-card .card-bottom i { background: #94a3b8; }
+.mode-night .recent-card,
+.mode-night .recent-card.card-1,
+.mode-night .recent-card.card-2,
+.mode-night .recent-card.card-3 { border-color: #25354d; background: var(--paper); }
+.mode-night .recent-card:hover,
+.mode-night .recent-card.card-1:hover,
+.mode-night .recent-card.card-2:hover,
+.mode-night .recent-card.card-3:hover { border-color: #355171; background: #111c2f; }
+.mode-night .recent-card .card-top { color: #a8bad1; }
+.mode-night .recent-card p { color: #c3d0e2; }
+.mode-night .recent-card .card-bottom { color: #93c5fd; }
+@media (max-width: 720px) {
+  .recent-grid { grid-template-columns: minmax(0, 1fr); }
+  .recent-card,
+  .recent-card.card-1,
+  .recent-card.card-2,
+  .recent-card.card-3 { height: 188px; min-height: 188px; }
+}
