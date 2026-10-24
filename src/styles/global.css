@@ -265,8 +265,8 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .profile-links a:hover { transform: translateY(-2px); }
 
 /* Site identity and friend names must remain legible at night. */
-.mode-night .brand-name,
-.mode-night .friend-row strong,
+.mode-night .brand-name { color: #fff7e8; }
+.mode-night .friend-row strong { background: transparent; color: #f8fafc; }
 .mode-night .profile-links a { border-color: rgba(238, 229, 205, .24); background: #f2ead9; color: #29332d; }
 .mode-night .profile-links a:hover { border-color: rgba(155, 199, 167, .72); background: #fff7e8; color: #1f2924; }
 
@@ -614,6 +614,9 @@ body { font-family: var(--sans); }
 .mode-night .article-section-content, .mode-night .profile-panel p { color: #dbe4f0; }
 .mode-night .profile-links a { border: 0; background: #172642; color: #bfdbfe; }
 .mode-night .profile-links a:hover { background: #1e3a5f; color: #eff6ff; }
+.mode-night .sidebar-tags button { border-color: transparent; background: #172642; color: #bfdbfe; }
+.mode-night .sidebar-tags button:hover,
+.mode-night .sidebar-tags button.is-selected { border-color: transparent; background: #1e3a5f; color: #eff6ff; }
 .profile-links a { border: 0; background: #f1f5f9; color: #2563eb; }
 .profile-links a:hover { border: 0; background: #dbeafe; color: #1d4ed8; }
 /* The WebGL surface may be alpha-composited on some mobile browsers; giving
