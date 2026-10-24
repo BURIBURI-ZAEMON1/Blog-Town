@@ -353,6 +353,36 @@ const groupPosts = (posts: LayoutPost[]) => {
   return groups;
 };
 
+
+const groupKey = (group: LayoutPost[]) => group[0].series ? `series:${group[0].series}` : `post:${group[0].id}`;
+
+type StableArticlePlot = {
+  id: string;
+  order: number;
+  x: number;
+  z: number;
+  roof: TownPlot['roof'];
+  walls: TownPlot['walls'];
+  accent: number;
+  style: TownBuildingStyle;
+};
+
+// The formal blog already has a public town map. Keep these existing article
+// groups pinned while new groups use the next available reserved lot.
+const stableArticlePlots: Record<string, Record<string, StableArticlePlot>> = {
+  'heavens-door-town-v1': {
+    'post:post-first-service-outsourcing-competition': { id: 'article-building-1', order: 0, x: -4.36, z: 1.82, roof: 'hip', walls: 'plaster', accent: 0, style: 'villa' },
+    'series:Obsidian': { id: 'article-building-2', order: 1, x: 4.28, z: -1.42, roof: 'flat', walls: 'timber', accent: 1, style: 'rowhouse' },
+    'series:Hello, Blog!': { id: 'article-building-3', order: 2, x: -2.20, z: -4.66, roof: 'flat', walls: 'stone', accent: 2, style: 'workshop' },
+  },
+};
+
+const stableGroupOrder = (group: LayoutPost[]) => {
+  const dates = group.map((post) => post.date ? Date.parse(post.date) : Number.POSITIVE_INFINITY).filter(Number.isFinite);
+  return dates.length ? Math.min(...dates) : Number.POSITIVE_INFINITY;
+};
+const stableBuildingStyle = (seed: string, key: string) => pickBuildingStyle(rngFor(`${seed}:article-style:${key}`), 0);
+
 const visibleSlots: Point[] = [
   { x: -7.6, z: -5.8 }, { x: -6.0, z: -5.8 }, { x: -4.4, z: -5.8 }, { x: -2.8, z: -5.8 },
   { x: 3.0, z: -5.8 }, { x: 4.6, z: -5.8 }, { x: 6.2, z: -5.8 }, { x: 7.8, z: -5.8 },
@@ -365,8 +395,16 @@ const visibleSlots: Point[] = [
 ];
 
 export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[] = []): TownLayout => {
-  const random = rngFor(seed);
   const groups = groupPosts(posts);
+  const presets = stableArticlePlots[seed] ?? {};
+  const orderedGroups = [...groups].sort((a, b) => {
+    const aPreset = presets[groupKey(a)];
+    const bPreset = presets[groupKey(b)];
+    if (aPreset && bPreset) return aPreset.order - bPreset.order;
+    if (aPreset) return -1;
+    if (bPreset) return 1;
+    return stableGroupOrder(a) - stableGroupOrder(b) || hashSeed(`${seed}:article-group:${groupKey(a)}`) - hashSeed(`${seed}:article-group:${groupKey(b)}`);
+  });
   const occupied: TownPlot[] = [];
   const plots: TownPlot[] = [];
   const roofs: TownPlot['roof'][] = ['gable', 'hip', 'flat'];
@@ -408,23 +446,31 @@ export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[
   let unlockedRing = 0;
   const ringOccupied = new Map<number, number>();
   const unlockThreshold = 0.58;
-  groups.forEach((group, groupIndex) => {
-    let candidate = candidates.find(({ slot, ring }) => ring <= unlockedRing && isBuildablePlot({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, occupied));
-    while (!candidate && unlockedRing < Math.max(...ringCapacity.keys())) {
-      unlockedRing += 1;
+  orderedGroups.forEach((group, groupIndex) => {
+    const key = groupKey(group);
+    const preset = presets[key];
+    const presetCandidate = preset ? candidates.find(({ slot }) => Math.abs(slot.x - preset.x) < 0.001 && Math.abs(slot.z - preset.z) < 0.001) : undefined;
+    let candidate = presetCandidate;
+    if (!candidate) {
       candidate = candidates.find(({ slot, ring }) => ring <= unlockedRing && isBuildablePlot({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, occupied));
+      while (!candidate && unlockedRing < Math.max(...ringCapacity.keys())) {
+        unlockedRing += 1;
+        candidate = candidates.find(({ slot, ring }) => ring <= unlockedRing && isBuildablePlot({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, occupied));
+      }
     }
     const slot = candidate?.slot;
     if (!slot) throw new Error(`No collision-free article building lot remains for article group ${groupIndex + 1}.`);
-    const style = pickBuildingStyle(random, groupIndex);
+    const style = preset ? { style: preset.style, roof: preset.roof, walls: preset.walls } : stableBuildingStyle(seed, key);
+    const groupRandom = rngFor(`${seed}:article-plot:${key}`);
     const plot: TownPlot = {
-      id: `article-building-${groupIndex + 1}`,
+      id: preset?.id ?? `article-building-${plots.length + 1}`,
       x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth,
-      roof: style.roof ?? roofs[(groupIndex + random() * roofs.length) % roofs.length | 0],
-      walls: style.walls ?? walls[(groupIndex + random() * walls.length) % walls.length | 0],
-      accent: groupIndex % 4, style: style.style, postId: group[0].id,
+      roof: style.roof ?? roofs[Math.floor(groupRandom() * roofs.length)],
+      walls: style.walls ?? walls[Math.floor(groupRandom() * walls.length)],
+      accent: preset?.accent ?? hashSeed(`${seed}:accent:${key}`) % 4,
+      style: style.style, postId: group[0].id,
       special: specialBuildingStyles.some((candidate) => candidate.style === style.style) ? style.style as TownSpecialStyle : undefined,
-      seedIndex: groupIndex, seriesPostIds: group.length > 1 ? group.map((post) => post.id) : undefined,
+      seedIndex: preset?.order ?? plots.length, seriesPostIds: group.length > 1 ? group.map((post) => post.id) : undefined,
     };
     occupied.push(plot); plots.push(plot);
     const placedRing = candidate?.ring ?? 0;

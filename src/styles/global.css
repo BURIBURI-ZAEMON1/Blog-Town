@@ -1186,3 +1186,62 @@ body { font-family: var(--sans); }
   .town-caption > span, .town-caption button { white-space: nowrap; }
   .town-caption .caption-spacer { display: none; }
 }
+
+/* Recent, unread article callouts use a warm paper signal for contrast on the map. */
+.town-new-posts-overlay {
+  --notice-ink: #fff0c8;
+  --notice-line: #f0d28f;
+  --notice-dot: #ffd978;
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+.town-new-post-lines { position: absolute; inset: 0; overflow: hidden; }
+.town-new-post-lines path { fill: none; stroke: var(--notice-line); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; opacity: .74; }
+.town-new-post-lines circle { fill: var(--notice-line); }
+.town-new-post-pulse { fill: none !important; stroke: var(--notice-line); stroke-width: 1; opacity: .26; animation: town-new-post-pulse 2.8s ease-out infinite; }
+.town-new-post-pulse-guide { stroke: var(--gold); opacity: .34; }
+.town-new-post-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--notice-ink);
+  text-shadow: 0 1px 2px rgba(31, 39, 31, .82), 0 0 8px rgba(31, 39, 31, .42);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.town-new-post-label > span {
+  color: transparent;
+  background: linear-gradient(105deg, var(--notice-ink) 35%, #fffdf0 49%, var(--notice-ink) 63%);
+  background-size: 260% 100%;
+  background-position: 160% 0;
+  background-clip: text;
+  -webkit-background-clip: text;
+  animation: town-new-post-sheen 5.5s ease-in-out infinite;
+}
+.town-new-post-label:hover { --notice-ink: #fffdf0; }
+.town-new-post-label-guide { flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; padding: 0; font-family: var(--serif); font-size: 15px; line-height: 1.15; }
+.town-new-post-label-guide strong { color: var(--notice-ink); font-weight: 600; }
+.town-new-post-label-guide span { color: var(--notice-line); text-shadow: 0 1px 2px rgba(31, 39, 31, .82); font-family: var(--sans); font-size: 11px; }
+.town-new-post-label-guide span::after { content: '  ↗'; color: var(--notice-dot); font-family: var(--mono); font-size: 10px; }
+@keyframes town-new-post-pulse { 0% { transform: scale(.65); opacity: .42; } 70%, 100% { transform: scale(2.8); opacity: 0; } }
+.town-new-post-label:focus-visible { outline: 2px solid var(--notice-dot); outline-offset: 2px; }
+.town-new-post-dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--notice-dot); box-shadow: 0 0 9px rgba(255, 214, 112, .56); }
+.mode-night .town-new-posts-overlay { --notice-ink: #fff2c9; --notice-line: #e5c57e; --notice-dot: #ffe09a; }
+@keyframes town-new-post-sheen { 0%, 40% { background-position: 160% 0; } 75%, 100% { background-position: -60% 0; } }
+.town-new-posts-overlay[data-reduced-motion="true"] .town-new-post-label > span { animation: none; background: none; color: var(--notice-ink); }
+@media (prefers-reduced-motion: reduce) { .town-new-post-label > span { animation: none; background: none; color: var(--notice-ink); } .town-new-post-pulse { animation: none; opacity: .24; } }

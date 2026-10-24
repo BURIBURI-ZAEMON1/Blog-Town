@@ -27,6 +27,8 @@ export type TownSceneProps = {
   layout?: TownLayout;
   activePostId?: string;
   hoveredPostId?: string;
+  newPostIds?: readonly string[];
+  guidePostId?: string;
   query: string;
   category?: string;
   tag?: string;
@@ -38,5 +40,6 @@ export type TownSceneProps = {
   onHoverPost: (id?: string, anchor?: SceneAnchor) => void;
   onResolvePostAnchor: (id: string, anchor: SceneAnchor) => void;
   onSelectPost: (id: string, pointerType?: string) => void;
+  onTownExplored?: () => void;
 };
 

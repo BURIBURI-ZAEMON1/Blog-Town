@@ -21,12 +21,16 @@ import { weatherIsPrecipitating } from '../../data/town-weather';
 import { SEASON_PROFILES } from '../../data/town-seasons';
 import { createSeasonController } from './seasons';
 import { createWeatherController } from './weather';
+import { createPostNoticeProjector } from './post-notices';
+import type { PostNoticeFrame } from '../../data/town-post-notices';
 import type { TownLayout } from '../../data/town-layout';
 import type { TownSceneProps } from './types';
 import { clampToPanBounds, getCameraPanBounds, getDragPanDelta } from './view';
 
-export type SceneState = Pick<TownSceneProps,'activePostId'|'hoveredPostId'|'query'|'category'|'tag'|'colorMode'|'reducedMotion'|'season'>;
-export type SceneCallbacks = Pick<TownSceneProps,'onHoverPost'|'onResolvePostAnchor'|'onSelectPost'>;
+export type SceneState = Pick<TownSceneProps,'activePostId'|'hoveredPostId'|'newPostIds'|'guidePostId'|'query'|'category'|'tag'|'colorMode'|'reducedMotion'|'season'>;
+export type SceneCallbacks = Pick<TownSceneProps,'onHoverPost'|'onResolvePostAnchor'|'onSelectPost'|'onTownExplored'> & {
+  onResolveNewPostAnchors?: (frame: PostNoticeFrame) => void;
+};
 const color=(hex:string)=>Color3.FromHexString(hex);
 
 export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:TownSceneProps['posts'],initial:SceneState,callbacks:()=>SceneCallbacks,onFirstFrame?:()=>void,onZoomChange?:(zoom:number,defaultZoom:number)=>void) {
@@ -81,6 +85,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const world=buildWorld(scene,layout,mobile);
   const houses=layout.plots.map(p=>buildHouse(scene,p,mobile));
   const houseMeshes=houses.flatMap(h=>h.meshes);
+  const postNotices=createPostNoticeProjector(scene,camera,houses);
   const seasons=createSeasonController({scene,world,mobile,seed:layout.seed,surfaces:[...world.snowSurfaces,...houses.flatMap(h=>h.snowSurfaces)]});
   const weather=createWeatherController(scene,layout.seed,mobile);
   seasons.set(initial.season,initial.reducedMotion);
@@ -299,6 +304,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     weather.tick(dt);seasons.tick(dt,state.reducedMotion);
     if(!state.reducedMotion&&state.season!=='winter')for(const m of world.glints)m.visibility=0.65+Math.sin(elapsed*1.5)*0.15;
     const renderStarted=performance.now();scene.render();const renderCost=performance.now()-renderStarted;frames++;
+    const noticeFrame=postNotices.project(state.newPostIds, state.guidePostId, canvas.clientWidth, canvas.clientHeight);
+    if(noticeFrame)callbacks().onResolveNewPostAnchors?.(noticeFrame);
     if(frames===1){onFirstFrame?.();window.setTimeout(()=>{void initVisualEffects();},mobile?350:0);}
     if(ao&&renderCost>55){slowRenderFrames++;if(slowRenderFrames>=4){ao.dispose();ao=undefined;canvas.dataset.adaptiveAo='off';}}else slowRenderFrames=Math.max(0,slowRenderFrames-1);
     if(frames===1||now-lastDiagnostics>500)publishDiagnostics(now);

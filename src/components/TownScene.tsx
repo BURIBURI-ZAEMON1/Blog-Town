@@ -4,6 +4,8 @@ import { SEASON_PROFILES } from '../data/town-seasons';
 import type { TownSceneProps } from '../scene/brick-town/types';
 import type { mountBrickTown } from '../scene/brick-town/runtime';
 import TownZoomOrb from './TownZoomOrb';
+import TownPostNotices from './TownPostNotices';
+import type { PostNoticeFrame } from '../data/town-post-notices';
 export type { TownPost, SceneAnchor } from '../scene/brick-town/types';
 
 type TownSceneLifecycleProps = TownSceneProps & {
@@ -19,16 +21,17 @@ export default function TownScene(props: TownSceneLifecycleProps) {
   const [error, setError] = useState(false);
   const [ready, setReady] = useState(false);
   const [zoom, setZoom] = useState(1.9);
+  const [noticeFrame, setNoticeFrame] = useState<PostNoticeFrame>();
   const fallback = useMemo(() => props.layout ?? createTownLayout('river-bend-demo-v2', props.posts), [props.layout, props.posts]);
   useEffect(() => {
     let cancelled = false;
     const loadingStartedAt = performance.now();
     const canvas = canvasRef.current; if (!canvas) return;
-    setError(false); setReady(false);
+    setError(false); setReady(false); setNoticeFrame(undefined);
     latest.current.onLoadingStart?.();
     import('../scene/brick-town/runtime').then(({ mountBrickTown }) => {
       if (cancelled) return;
-      runtimeRef.current = mountBrickTown(canvas, fallback, latest.current.posts, latest.current, () => latest.current, () => {
+      runtimeRef.current = mountBrickTown(canvas, fallback, latest.current.posts, latest.current, () => ({ ...latest.current, onResolveNewPostAnchors: setNoticeFrame }), () => {
         if (cancelled) return;
         const loadingMs = Math.round(performance.now() - loadingStartedAt);
         canvas.dataset.loadingMs = String(loadingMs);
@@ -38,9 +41,10 @@ export default function TownScene(props: TownSceneLifecycleProps) {
     }).catch((initializationError) => { if (!cancelled) { console.error('Brick town initialization failed', initializationError); setError(true); latest.current.onInitializationError?.(); } });
     return () => { cancelled = true; runtimeRef.current?.dispose(); runtimeRef.current = undefined; };
   }, [fallback, props.posts]);
-  useEffect(() => { runtimeRef.current?.update(props); }, [props.season, props.colorMode, props.reducedMotion, props.hoveredPostId, props.activePostId, props.query, props.category, props.tag, ready]);
+  useEffect(() => { runtimeRef.current?.update(props); }, [props.season, props.colorMode, props.reducedMotion, props.hoveredPostId, props.activePostId, props.newPostIds, props.guidePostId, props.query, props.category, props.tag, ready]);
   return <div className="town-canvas-host brick-town-host" data-testid="town-canvas">
     <canvas ref={canvasRef} aria-label={`${SEASON_PROFILES[props.season].label}季积木小镇：桌面使用缩放控件，手机双指捏合缩放；点击建筑阅读文章；拖动移动地图`} />
+    {ready && noticeFrame && <TownPostNotices posts={props.posts} newPostIds={props.newPostIds} frame={noticeFrame} reducedMotion={props.reducedMotion} onOpen={(id) => { latest.current.onTownExplored?.(); latest.current.onSelectPost(id); }} />}
     {error && <div className="brick-loading" role="status">当前设备无法绘制小镇，请通过下方文章列表阅读。</div>}
     <TownZoomOrb zoom={zoom} minZoom={0.75} maxZoom={2.6} onZoom={(amount) => runtimeRef.current?.zoom(amount)} onReset={() => runtimeRef.current?.home()} />
   </div>;
