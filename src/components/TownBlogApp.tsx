@@ -511,8 +511,10 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         {surface === 'town' && <section className="town-home">
           <TownStage posts={posts} layout={layout} newPostIds={newPostIds} guidePostId={guidePostId} onTownExplored={markExplored} season={season} activePostId={selectedPostId} hoveredPostId={touchPostId ?? hoveredPostId} query={query} category={highlightCategory} tag={highlightTag} categoryPreview={Boolean(previewCategory)} tagPreview={Boolean(previewTag)} colorMode={colorMode} reducedMotion={reducedMotion} onHoverPost={onHoverPost} onResolvePostAnchor={onResolvePostAnchor} onSelectPost={selectScenePost} hoveredPost={hoveredPost} hoverAnchor={hoverAnchor} touchPost={touchPost} onCloseTouchPreview={() => setTouchPostId(undefined)} />
           <p className="mobile-town-hint">点击建筑预览，再次点击或选择「阅读文章」打开；横向拖动地图，纵向滑动页面。</p>
-          <div className="town-caption"><span><i className="caption-dot" /> {siteConfig.title} · {SEASON_PROFILES[season].label}季小镇</span><span>建筑即文章 / {layout.plots.length} buildings / {posts.length} article floors</span><span className="caption-spacer" /><button onClick={() => navigate('archive')}>打开完整档案 {icon('arrow')}</button></div>
-          <RecentPosts posts={filteredPosts.slice(0, 5)} hasFilter={Boolean(query || activeCategory || activeTag)} onOpen={openArticle} onClear={clearFilters} sectionRef={recentRef} />
+          <div className="town-mobile-support">
+            <div className="town-caption"><span><i className="caption-dot" /> {siteConfig.title} · {SEASON_PROFILES[season].label}季小镇</span><span>建筑即文章 / {layout.plots.length} buildings / {posts.length} article floors</span><span className="caption-spacer" /><button onClick={() => navigate('archive')}>打开完整档案 {icon('arrow')}</button></div>
+            <RecentPosts posts={filteredPosts.slice(0, 5)} hasFilter={Boolean(query || activeCategory || activeTag)} onOpen={openArticle} onClear={clearFilters} sectionRef={recentRef} />
+          </div>
         </section>}
         {surface === 'archive' && <ArchiveView posts={filteredPosts} compact={false} onOpen={openArticle} />}
         {surface === 'article' && selectedPost && <ArticleView post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onBack={returnFromArticle} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
