@@ -83,6 +83,7 @@ const icon = (name: string) => {
     back: 'M19 12H6M11 6l-6 6 6 6',
     close: 'M6 6l12 12M18 6 6 18',
     menu: 'M4 7h16M4 12h16M4 17h16',
+    toc: 'M5 6.5h.01M5 12h.01M5 17.5h.01M10 6.5h10M10 12h10M10 17.5h10',
     external: 'M14 5h5v5M19 5l-8 8M17 13v5H5V6h5',
     chevron: 'm9 6 6 6-6 6',
   };
@@ -177,6 +178,14 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const highlightTag = previewTag ?? activeTag;
   const sidebarPosts = sidebarPanel === 'category-posts' ? sortedPosts.filter((post) => post.category === activeCategory) : sidebarPanel === 'tag-posts' ? sortedPosts.filter((post) => activeTag && post.tags.includes(activeTag)) : sortedPosts;
   const currentSeriesPosts = useMemo(() => selectedPost?.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : [], [selectedPost, sortedPosts]);
+
+  useEffect(() => {
+    if (surface !== 'article' || !selectedPostId) return;
+    const frame = window.requestAnimationFrame(() => {
+      mainSurfaceRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [selectedPostId, surface]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 720px)');
@@ -336,7 +345,6 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
     setPreviewTag(undefined);
     setHoveredPostId(undefined);
     setHoverAnchor(undefined);
-    mainSurfaceRef.current?.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' });
   };
 
   const returnFromArticle = () => {
@@ -574,16 +582,22 @@ function ArticleView({ post, layout, related, scrollRoot, onBack, onOpen }: { po
   const headingKey = headings.map((heading) => heading.id).join('|');
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [activeHeadingId, setActiveHeadingId] = useState<string | undefined>(headings[0]?.id);
+  const [readingProgress, setReadingProgress] = useState(0);
   useEffect(() => {
     setCollapsed({});
     setActiveHeadingId(headings[0]?.id);
+    setReadingProgress(0);
   }, [post.id]);
   useEffect(() => {
     const root = scrollRoot.current;
-    if (!root || !headings.length) return;
+    if (!root) return;
     let frame: number | undefined;
-    const updateActiveHeading = () => {
+    const updateReadingState = () => {
       frame = undefined;
+      const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
+      const progress = maxScroll === 0 ? 0 : Math.min(1, Math.max(0, root.scrollTop / maxScroll));
+      setReadingProgress(Math.round(progress * 100));
+      if (!headings.length) return;
       const rootTop = root.getBoundingClientRect().top;
       const readingLine = rootTop + 118;
       let next = headings[0]?.id;
@@ -596,9 +610,9 @@ function ArticleView({ post, layout, related, scrollRoot, onBack, onOpen }: { po
       setActiveHeadingId((current) => current === next ? current : next);
     };
     const requestUpdate = () => {
-      if (frame === undefined) frame = window.requestAnimationFrame(updateActiveHeading);
+      if (frame === undefined) frame = window.requestAnimationFrame(updateReadingState);
     };
-    updateActiveHeading();
+    updateReadingState();
     root.addEventListener('scroll', requestUpdate, { passive: true });
     window.addEventListener('resize', requestUpdate);
     return () => {
@@ -629,12 +643,61 @@ function ArticleView({ post, layout, related, scrollRoot, onBack, onOpen }: { po
     const headingTags: Record<number, ElementType> = { 1: 'h2', 2: 'h3', 3: 'h4', 4: 'h5', 5: 'h6', 6: 'h6' };
     const Heading = section.heading ? headingTags[Math.min(section.heading.level, 6)] : undefined;
     return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id}>{section.heading.text}</Heading><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <div className="article-section-content" dangerouslySetInnerHTML={{ __html: section.html }} />}</section>;
-  })}</div><div className="article-footer"><span>townId · {post.id}</span><span>／</span><span>{siteConfig.shortTitle} · map 01</span></div></article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} layout={layout} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} />}{related.length > 0 && <div className="related-posts"><span>继续阅读</span>{related.map((item) => <button key={item.id} onClick={() => onOpen(item.id)}><small>{item.category}</small><strong>{item.title}</strong></button>)}</div>}</aside></div></section>;
+  })}</div><div className="article-footer"><span>townId · {post.id}</span><span>／</span><span>{siteConfig.shortTitle} · map 01</span></div>{related.length > 0 && <div className="related-posts"><span>继续阅读</span>{related.map((item) => <button key={item.id} onClick={() => onOpen(item.id)}><small>{item.category}</small><strong>{item.title}</strong></button>)}</div>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} layout={layout} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
 }
 
-function ArticleContents({ headings, activeHeadingId }: { headings: ArticleHeading[]; activeHeadingId?: string }) {
-  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  return <nav className="article-contents" aria-label="文章目录"> <span>文章目录</span>{headings.map((heading) => <button key={heading.id} aria-current={heading.id === activeHeadingId ? 'location' : undefined} className={`toc-level-${heading.level} ${heading.id === activeHeadingId ? 'is-active' : ''}`} onClick={() => jumpTo(heading.id)}>{heading.text}</button>)}</nav>;
+type ArticleContentsProps = { headings: ArticleHeading[]; activeHeadingId?: string; readingProgress: number };
+
+function ArticleContents({ headings, activeHeadingId, readingProgress }: ArticleContentsProps) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const contentsId = useId();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const jumpTo = (id: string) => {
+    const element = document.getElementById(id);
+    const root = document.querySelector<HTMLElement>('.main-scroll');
+    if (element && root) {
+      const rootTop = root.getBoundingClientRect().top;
+      const target = root.scrollTop + element.getBoundingClientRect().top - rootTop - 104;
+      const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
+      root.scrollTo({ top: Math.min(maxScroll, Math.max(0, target)), behavior: 'smooth' });
+    }
+    setMobileOpen(false);
+  };
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const button = activeHeadingId ? buttonRefs.current.get(activeHeadingId) : undefined;
+    if (!viewport || !button) return;
+    const target = button.offsetTop - viewport.clientHeight / 2 + button.offsetHeight / 2;
+    viewport.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+  }, [activeHeadingId]);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [mobileOpen]);
+
+  const toggleMobileContents = () => {
+    if (window.matchMedia('(max-width: 720px)').matches) setMobileOpen((open) => !open);
+  };
+
+  return <div className={`article-contents-block ${mobileOpen ? 'is-mobile-open' : ''}`}>
+    <div id={contentsId} className="article-contents-shell">
+      <nav ref={viewportRef} className="article-contents-viewport" aria-label="文章目录">
+        <div className="article-contents-list">{headings.map((heading) => <button ref={(element) => { if (element) buttonRefs.current.set(heading.id, element); else buttonRefs.current.delete(heading.id); }} key={heading.id} aria-current={heading.id === activeHeadingId ? 'location' : undefined} className={`toc-level-${heading.level} ${heading.id === activeHeadingId ? 'is-active' : ''}`} onClick={() => jumpTo(heading.id)}><span className="toc-node" aria-hidden="true" /><span className="toc-label">{heading.text}</span></button>)}</div>
+      </nav>
+    </div>
+    <button type="button" className="reading-progress" aria-label={`${mobileOpen ? '关闭' : '打开'}文章目录，阅读进度 ${readingProgress}%`} aria-expanded={mobileOpen} aria-controls={contentsId} onClick={toggleMobileContents}>
+      <svg viewBox="0 0 48 48" aria-hidden="true"><circle className="reading-progress-track" cx="24" cy="24" r="19" /><circle className="reading-progress-value" cx="24" cy="24" r="19" pathLength="100" style={{ strokeDashoffset: 100 - readingProgress }} /></svg>
+      <span className="reading-progress-directory-icon" aria-hidden="true">{icon('toc')}</span>
+      <span><strong>{readingProgress}</strong><small>%</small></span>
+      <em>阅读进度</em>
+    </button>
+  </div>;
 }
 
 function SeriesDirectory({ posts, selectedPostId, onOpenArticle }: { posts: TownPost[]; selectedPostId?: string; onOpenArticle: (id: string) => void }) { return <div className="series-directory"><span className="series-directory-label">当前系列 · {posts[0]?.series}</span>{posts.map((post, index) => <button key={post.id} className={post.id === selectedPostId ? 'is-current' : ''} onClick={() => onOpenArticle(post.id)}><b>{index + 1}:</b><span>{post.title}</span></button>)}</div>; }
@@ -740,15 +803,19 @@ function MiniTownMap({ post, layout }: { post: TownPost; layout: TownLayout }) {
   const path = (points: { x: number; z: number }[]) => points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.z}`).join(' ');
   const polygonFor = (building: typeof map.buildings[number]) => building.points?.map((point) => `${point.x},${point.z}`).join(' ') ?? '';
   return <div className="article-location" aria-label={`文章建筑在小镇中的位置：${post.title}`}>
-    <svg className="pixel-town-map" viewBox={`${map.bounds.minX} ${map.bounds.minZ} ${map.bounds.maxX - map.bounds.minX} ${map.bounds.maxZ - map.bounds.minZ}`} shapeRendering="crispEdges" role="img" aria-hidden="true">
-      <rect className="mini-map-ground" x={map.bounds.minX} y={map.bounds.minZ} width={map.bounds.maxX - map.bounds.minX} height={map.bounds.maxZ - map.bounds.minZ} />
-      <path className="mini-map-water" d={path(map.river.points)} style={{ strokeWidth: map.river.width }} />
-      {map.roads.map((road, index) => <path className="mini-map-road" d={path(road.points)} style={{ strokeWidth: road.width }} key={`road-${index}`} />)}
-      <path className="mini-map-road mini-map-center-ring" d={path(map.centerRing.points)} style={{ strokeWidth: map.centerRing.width }} />
-      {map.centerConnectors.map((connector, index) => <path className="mini-map-road mini-map-center-connector" d={path(connector.points)} style={{ strokeWidth: connector.width }} key={`connector-${index}`} />)}
-      {map.buildings.map((building) => <polygon className={`mini-map-building ${building === map.selected ? 'is-selected' : ''}`} key={building.id} points={polygonFor(building)} />)}
-      {map.selected && <circle className="mini-map-marker" cx={map.selected.x} cy={map.selected.z} r="1.8" />}
-    </svg>
+    <div className="article-location-header"><span>ARTICLE LOCATION</span><span>{post.series ? `FLOOR ${String((post.seriesIndex ?? 0) + 1).padStart(2, '0')}` : 'PLOT 01'}</span></div>
+    <div className="article-location-map">
+      <svg className="pixel-town-map" viewBox={`${map.bounds.minX} ${map.bounds.minZ} ${map.bounds.maxX - map.bounds.minX} ${map.bounds.maxZ - map.bounds.minZ}`} preserveAspectRatio="none" shapeRendering="crispEdges" role="img" aria-hidden="true">
+        <rect className="mini-map-ground" x={map.bounds.minX} y={map.bounds.minZ} width={map.bounds.maxX - map.bounds.minX} height={map.bounds.maxZ - map.bounds.minZ} />
+        <path className="mini-map-water" d={path(map.river.points)} style={{ strokeWidth: map.river.width }} />
+        {map.roads.map((road, index) => <path className="mini-map-road" d={path(road.points)} style={{ strokeWidth: road.width }} key={`road-${index}`} />)}
+        <path className="mini-map-road mini-map-center-ring" d={path(map.centerRing.points)} style={{ strokeWidth: map.centerRing.width }} />
+        {map.centerConnectors.map((connector, index) => <path className="mini-map-road mini-map-center-connector" d={path(connector.points)} style={{ strokeWidth: connector.width }} key={`connector-${index}`} />)}
+        {map.buildings.map((building) => <polygon className={`mini-map-building ${building === map.selected ? 'is-selected' : ''}`} key={building.id} points={polygonFor(building)} />)}
+        {map.selected && <><circle className="mini-map-marker-halo" cx={map.selected.x} cy={map.selected.z} r="4.3" /><circle className="mini-map-marker" cx={map.selected.x} cy={map.selected.z} r="1.8" /></>}
+      </svg>
+    </div>
+    <div className="article-location-caption"><span className="article-location-pin" aria-hidden="true" /><span><small>文章建筑</small><strong>{post.title}</strong></span></div>
   </div>;
 }
 
