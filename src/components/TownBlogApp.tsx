@@ -15,17 +15,6 @@ type MainSurface = 'town' | 'article' | 'archive';
 type ColorMode = 'day' | 'night';
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-type ReturnContext = {
-  surface: MainSurface;
-  sidebarPanel: SidebarPanel;
-  sidebarCategory?: string;
-  sidebarTag?: string;
-  category?: string;
-  tag?: string;
-  query: string;
-  scrollY: number;
-};
-
 type Props = { posts: TownPost[]; layout: TownLayout; initialSurface?: MainSurface; initialPostId?: string };
 
 const TownScene = lazy(async () => {
@@ -149,7 +138,6 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const returnContextRef = useRef<ReturnContext | undefined>(undefined);
   const recentRef = useRef<HTMLElement>(null);
   const mainSurfaceRef = useRef<HTMLDivElement>(null);
 
@@ -277,30 +265,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
 
     const onPopState = () => {
       const next = readLocation();
-      const context = returnContextRef.current ?? (window.history.state?.returnContext as ReturnContext | undefined);
-      if (context && next.surface !== 'article') {
-        setSurface(context.surface);
-        setSidebarPanel(context.sidebarPanel);
-        setSidebarCategory(context.sidebarCategory);
-        setSidebarTag(context.sidebarTag);
-        setActiveCategory(context.category);
-        setActiveTag(context.tag);
-        setQuery(context.query);
-        setSelectedPostId(undefined);
-        setHoveredPostId(undefined);
-        setHoverAnchor(undefined);
-        setTouchPostId(undefined);
-        setSearchOpen(false);
-        setMobileSidebarOpen(false);
-        returnContextRef.current = undefined;
-        window.setTimeout(() => mainSurfaceRef.current?.scrollTo({ top: context.scrollY, behavior: 'auto' }), 0);
-        return;
-      }
       setSurface(next.surface);
       setSelectedPostId(next.postId);
-      if (next.surface !== 'article') {
-        returnContextRef.current = undefined;
-      }
       setTouchPostId(undefined);
       setSearchOpen(false);
       setMobileSidebarOpen(false);
@@ -310,7 +276,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
     return () => window.removeEventListener('popstate', onPopState);
   }, [posts]);
 
-  const navigate = (nextSurface: MainSurface, postId?: string, state: Record<string, unknown> = {}) => {
+  const navigate = (nextSurface: MainSurface, postId?: string) => {
     setMobileSidebarOpen(false);
     setTouchPostId(undefined);
     setSearchOpen(false);
@@ -320,27 +286,15 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
     const path = nextSurface === 'article' && postId
       ? `/posts/${encodeURIComponent(postId)}/`
       : nextSurface === 'archive' ? '/posts/' : '/';
-    window.history.pushState({ surface: nextSurface, postId, ...state }, '', path);
+    window.history.pushState({ surface: nextSurface, postId }, '', path);
   };
 
   const openArticle = (id: string) => {
-    // Keep one return checkpoint for the original town/archive entry. When an
-    // article links to another article, add a history entry without replacing
-    // that checkpoint so repeated Back actions eventually restore the origin.
-    const enteringArticle = surface !== 'article';
-    const returnContext: ReturnContext = { surface, sidebarPanel, sidebarCategory, sidebarTag, category: activeCategory, tag: activeTag, query, scrollY: mainSurfaceRef.current?.scrollTop ?? 0 };
-    if (enteringArticle) returnContextRef.current = returnContext;
-    navigate('article', id, enteringArticle ? { returnContext } : {});
+    navigate('article', id);
     setPreviewCategory(undefined);
     setPreviewTag(undefined);
     setHoveredPostId(undefined);
     setHoverAnchor(undefined);
-  };
-
-  const returnFromArticle = () => {
-    const context = returnContextRef.current;
-    if (!context) return navigate('town');
-    window.history.back();
   };
 
   const chooseCategory = (category?: string) => {
@@ -518,7 +472,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           </div>
         </section>}
         {surface === 'archive' && <ArchiveView posts={filteredPosts} compact={false} onOpen={openArticle} />}
-        {surface === 'article' && selectedPost && <ArticleView post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onBack={returnFromArticle} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
+        {surface === 'article' && selectedPost && <ArticleView post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
         {surface === 'article' && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
       </main>
@@ -556,7 +510,7 @@ function ArchiveView({ posts, compact, onOpen }: { posts: TownPost[]; compact: b
 
 type ArticleHeading = NonNullable<TownPost['sections'][number]['heading']>;
 
-function ArticleView({ post, layout, seriesPosts, scrollRoot, onBack, onOpen }: { post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onBack: () => void; onOpen: (id: string) => void }) {
+function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen }: { post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
   const headings = post.sections.flatMap((section) => section.heading ? [section.heading] : []);
   const seriesIndex = seriesPosts.findIndex((item) => item.id === post.id);
   const previousSeriesPost = seriesIndex > 0 ? seriesPosts[seriesIndex - 1] : undefined;
@@ -696,7 +650,7 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onBack, onOpen }: 
     return activeLevels.length > 0;
   };
 
-  return <section className="article-page"><button className="article-back" onClick={onBack}>{icon('back')} 返回原来的位置</button><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-rule" /><div className="article-body">{post.sections.map((section, index) => {
+  return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-rule" /><div className="article-body">{post.sections.map((section, index) => {
     const ancestorHidden = hiddenByCollapsedAncestor(index);
     const ownCollapsed = section.heading ? Boolean(collapsed[section.heading.id]) : false;
     const headingTags: Record<number, ElementType> = { 1: 'h2', 2: 'h3', 3: 'h4', 4: 'h5', 5: 'h6', 6: 'h6' };
