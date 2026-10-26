@@ -321,3 +321,31 @@ src/scene/brick-town/weather.ts   共享雨雪渲染及运动生命周期
 ```
 
 运行 `npm run verify:seasons` 可检查换季时布局和基础网格稳定、覆盖物避让、雪盖拾取、反复切换资源释放及减少动态效果；`npm run verify` 已包含该检查。
+
+## 13. 富 Markdown
+
+文章正文支持常见 Markdown，并提供 Obsidian 风格扩展。渲染结果在构建时生成，文章页面不需要在浏览器中加载代码高亮、公式或图表引擎。
+
+支持：
+
+- 普通 Markdown、表格、任务列表、删除线、高亮、链接和图片
+- Shiki 代码高亮，未知语言会保留为纯文本代码块
+- MathJax 行内公式 `$...$` 与独立公式 `$$...$$`
+- `> [!blue]` 等提示框，可使用 `+` 或 `-` 控制默认展开状态
+- `mermaid` 或 `pele` 代码围栏生成 Pele 图表
+- `[[文章 ID]]`、`[[文章标题]]` 和 `[[文章 ID|链接文字]]` 文章链接
+- `![[资源路径]]` 文件嵌入，以及 `![[文章 ID]]` 整篇文章嵌入
+
+资源嵌入只读取 `public/` 内的公开文件，并优先查找当前文章对应的 `public/assets/posts/<文章 ID>/` 目录。磁盘绝对路径、`..` 路径、符号链接和公开目录之外的文件不会被读取。文件嵌入支持图片、音频、视频和 PDF；文章嵌入支持点击标题栏展开或收起，文章链接仍可直接打开目标文章。
+
+Markdown 渲染的主要维护入口：
+
+```text
+src/lib/markdown.ts          Markdown 解析、清理和文章分段
+src/lib/markdown-rich.ts     公式、代码和图表渲染
+src/lib/markdown-embeds.ts   文件与文章资源解析、嵌入输出
+src/styles/markdown.css      文章内嵌内容样式
+scripts/verify-markdown.mjs  Markdown 回归测试
+```
+
+运行 `npm run verify:markdown` 可检查公式、代码、图表、提示框、任务列表、链接、嵌入、安全过滤以及嵌入折叠相关的渲染行为；`npm run verify` 已包含该检查。
