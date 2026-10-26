@@ -1,7 +1,10 @@
+import { resolve } from 'node:path';
 import { getCollection } from 'astro:content';
 import { createTownLayout } from '../data/town-layout';
 import { siteConfig } from '../config/site';
+import { createMarkdownResources } from './markdown-embeds';
 import { renderArticleMarkdown } from './markdown';
+
 
 const buildSiteData = async () => {
   const now = new Date();
@@ -30,9 +33,13 @@ const buildSiteData = async () => {
     seriesOrders.set(entry.data.series, orders);
   }
 
-  const posts = entries
-    .map((entry) => {
-      const rendered = renderArticleMarkdown(entry.body ?? '');
+  const resources = createMarkdownResources(resolve('public'), entries.map((entry) => ({
+    key: entry.id, title: entry.data.title, markdown: entry.body ?? '',
+    href: `/posts/${encodeURIComponent(entry.data.townId)}/`, assetDirectory: `/assets/posts/${entry.id}`,
+  })));
+  const posts = (await Promise.all(entries
+    .map(async (entry) => {
+      const rendered = await renderArticleMarkdown(entry.body ?? '', { resources, documentKey: entry.id });
       return {
         id: entry.data.townId,
         townId: entry.data.townId,
@@ -51,7 +58,7 @@ const buildSiteData = async () => {
         sections: rendered.sections,
         searchText: rendered.searchText,
       };
-    })
+    })))
     .sort((a, b) => +new Date(b.date) - +new Date(a.date));
 
   return {

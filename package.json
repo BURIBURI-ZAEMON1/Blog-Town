@@ -9,13 +9,14 @@
     "preview": "astro preview",
     "check": "astro check",
     "verify:spatial": "node scripts/verify-town-spatial.mjs",
-    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:spatial && npm run verify:life && npm run verify:brick && npm run verify:seasons && npm run verify:notices && npm run verify:layout",
+    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:spatial && npm run verify:life && npm run verify:brick && npm run verify:seasons && npm run verify:notices && npm run verify:layout && npm run verify:markdown",
     "verify:content": "node scripts/verify-content.mjs",
     "verify:life": "node scripts/verify-town-life.mjs",
     "verify:brick": "node scripts/verify-brick-town.mjs",
     "verify:seasons": "node scripts/verify-town-seasons.mjs",
     "verify:notices": "node scripts/verify-town-post-notices.mjs",
-    "verify:layout": "node scripts/verify-town-layout-stability.mjs"
+    "verify:layout": "node scripts/verify-town-layout-stability.mjs",
+    "verify:markdown": "node scripts/verify-markdown.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.4",
@@ -27,14 +28,20 @@
     "@fontsource/space-mono": "^5.3.0",
     "@fontsource/zcool-qingke-huangyou": "^5.3.0",
     "@ibm/plex-sans-sc": "^1.1.0",
+    "@mathjax/mathjax-newcm-font": "^4.1.3",
+    "@mathjax/src": "^4.1.3",
     "astro": "^7.2.8",
+    "entities": "^8.1.0",
     "marked": "16.3.0",
+    "pele": "^1.10.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "sanitize-html": "2.17.7"
+    "sanitize-html": "2.17.7",
+    "shiki": "^4.5.0"
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
+    "@types/node": "^26.6.5",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@types/sanitize-html": "2.16.0",
