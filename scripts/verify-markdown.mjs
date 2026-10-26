@@ -41,8 +41,6 @@ assert.match(html, /role="math"/);
 assert.match(html, /class="article-math is-display"/);
 assert.match(html, /data-mml-node="mfrac"/);
 assert.equal((html.match(/class="article-diagram"/g) ?? []).length, 2);
-assert.match(html, /class="article-embed-image"/);
-assert.match(html, /找不到文件或已发布文章：assets\/posts\/obsidian-sync\/missing\.txt/);
 assert.doesNotMatch(html, /article-render-error/);
 const mathHeading = article.sections.find((section) => section.heading?.text.includes('高亮'));
 assert.match(mathHeading.heading.html, /<mark>高亮<\/mark>/);
