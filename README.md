@@ -1,11 +1,11 @@
 # Town Blog Framework
 
-> 把博客变成一座会持续生长的积木小镇。
+> 把博客变成一座会持续生长、会随季节变化的积木小镇。
 
-一个以 **Astro + React + Babylon.js** 构建的高性能静态博客框架：文章会在首页地图中生成建筑，系列文章会组成同一栋建筑的不同楼层。你可以像逛小镇一样探索内容，也可以通过传统的文章列表、分类、标签和搜索快速阅读。
+Town Blog Framework 是一个基于 **Astro + React + Babylon.js** 的静态博客框架。每篇文章都会在小镇中拥有一栋建筑；同一系列的文章会组成同一栋建筑的不同楼层。读者可以探索地图，也可以通过档案、分类、标签、搜索和文章目录直接阅读。
 
 <p align="center">
-  <img src="assets/readme/town-default-view.png" alt="Town Blog Framework 默认小镇视图" width="100%" />
+  <img src="assets/readme/town-default-view.png" alt="Town Blog Framework 本地运行的小镇首页" width="100%" />
 </p>
 
 <p align="center">
@@ -14,42 +14,88 @@
 
 ## 为什么是小镇？
 
-博客通常会随着文章增多而变成长长的列表；Town Blog Framework 将这种增长转化为可视化的空间：
+博客会随着文章增多而变成长长的列表。Town Blog Framework 把这种增长转化为空间关系：
 
 - **写一篇文章，就为小镇添一栋建筑。**
 - **同一系列文章，组成同一栋建筑的不同楼层。**
-- **分类、标签和文章列表，提供更高效的内容入口。**
-- **小镇会随着内容增长变得更丰富，而不是越来越难以浏览。**
+- **建筑、文章列表、搜索和目录共同提供内容入口。**
+- **文章越多，小镇越丰富，而不是越难以浏览。**
 
-## 如何工作
+## 四季小镇
 
-### 从空地到小镇
+小镇拥有春、夏、秋、冬四种可切换形态。四季共享同一份建筑布局、道路、河流和文章坐标，所以切换季节时，文章入口不会被重新打乱：变化发生在材质、植被、地面、雪盖和天气层。
 
-文章数量增长后，小镇会自动生成更多建筑，并根据文章系列组织楼层。下面的示例展示了内容增多后的宽幅视图：
+<table>
+  <tr>
+    <td><img src="assets/readme/seasons/spring.png" alt="春季小镇" /></td>
+    <td><img src="assets/readme/seasons/summer.png" alt="夏季小镇" /></td>
+    <td><img src="assets/readme/seasons/autumn.png" alt="秋季小镇" /></td>
+    <td><img src="assets/readme/seasons/winter.png" alt="冬季小镇" /></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>春</strong><br />新绿与花朵</td>
+    <td align="center"><strong>夏</strong><br />浓绿与水面</td>
+    <td align="center"><strong>秋</strong><br />金黄与落叶</td>
+    <td align="center"><strong>冬</strong><br />雪地与冰面</td>
+  </tr>
+</table>
+
+季节可以按设备本地月份自动选择，也可以手动切换。雨雪天气使用站点种子和时间段确定，画面离开视口时会暂停渲染；手机和减少动态效果偏好会自动降低动态开销。
+
+## 文章阅读体验
+
+### 文章不是地图探索的终点
+
+文章页保留小镇关系，同时提供适合长文阅读的界面：右侧小地图标记当前文章建筑，目录会随着阅读位置移动，阅读进度显示为百分比；移动端则使用悬浮阅读球展开目录。
 
 <p align="center">
-  <img src="assets/readme/town-many-buildings-wide.png" alt="Town Blog Framework 多文章小镇视图" width="100%" />
+  <img src="assets/readme/article-reading-view.png" alt="Town Blog Framework 文章阅读页、小地图与目录" width="100%" />
 </p>
 
-### 用分类快速聚焦
+系列文章会在正文信息下方展开系列抽屉，文章底部只提供同系列的上一篇和下一篇，避免把读者带到无关内容。
 
-不想逐栋探索时，可以直接使用分类、标签和文章列表。选中分类后，小镇、侧边栏和文章区域会同步切换到对应内容并高亮对应建筑。
+### 富 Markdown 渲染器
 
-<p align="center">
-  <img src="assets/readme/town-category-highlight.png" alt="Town Blog Framework 分类筛选与文章高亮视图" width="100%" />
-</p>
+文章渲染器在构建阶段完成处理，不要求读者在浏览器中加载代码高亮、公式或图表引擎。除了基础 Markdown，还支持：
+
+- 单换行保留为真实换行、表格、任务列表、删除线和 `==高亮==`。
+- Shiki 多语言代码高亮，代码块右上角显示语言名称。
+- 外部链接末尾的链接标识，帮助读者识别可跳转内容。
+- MathJax 的行内公式 `$...$` 和独立公式 `$$...$$`。
+- Obsidian 风格提示框，支持颜色、标题、展开/收起和多层嵌套。
+- `[[文章]]`、`[[文章|自定义文字]]` 双向链接入口，直接跳转到其他文章。
+- `![[文件]]` 图片、音频、视频、PDF、附件和整篇文章嵌入；文章嵌入支持收起与展开。
+- `mermaid` 或 `pele` 代码围栏，通过 Pele 生成静态图表。
+
+完整语法和安全边界请查看 [使用文档：docs/USAGE.md](docs/USAGE.md)。
 
 ## 核心能力
 
-- **交互式 3D 小镇首页**：通过地图、建筑和建筑提示探索文章。
-- **Markdown 写作**：文章、图片和附件都可以直接放入仓库管理。
-- **多种内容入口**：小镇、完整文章列表、分类、标签与搜索并存。
-- **系列文章空间化**：同一系列共享建筑，系列索引对应楼层顺序。
-- **持续增长的视觉反馈**：文章越多，小镇越丰富；支持普通建筑、特殊建筑和小镇角色活动。
-- **响应式布局**：桌面端和移动端都保留核心阅读路径。
-- **日间 / 夜间模式**：界面与小镇场景都会随模式切换。
-- **集中配置**：网站信息、作者资料、社交链接和友链集中在一个配置文件中。
-- **纯静态部署**：不依赖数据库，适合部署到 GitHub Pages、Cloudflare Pages、Netlify 等静态托管平台。
+- **交互式 3D 小镇首页**：通过建筑、道路、提示和轻量角色活动探索文章。
+- **四季与天气**：共享布局的春夏秋冬、雨雪效果、昼夜模式和减少动态效果支持。
+- **新文章提醒**：未读且发布在最近两周内的文章会在对应建筑旁显示提示，引导第一次访问的读者理解建筑与文章的关系。
+- **富 Markdown**：基础排版、代码高亮、公式、提示框、双向链接、文件/文章嵌入和 Pele 图表。
+- **文章阅读工具**：系列抽屉、同系列上一篇/下一篇、独立目录滚动、阅读进度和文章小地图。
+- **多种内容入口**：小镇、档案、列表、分类、标签、友邻和搜索并存。
+- **稳定的小镇布局**：文章新增后，已有建筑的位置和样式保持稳定；系列文章继续共享建筑楼层。
+- **响应式布局**：桌面端强调探索，移动端保留轻量、直接的阅读路径。
+- **纯静态部署**：不依赖数据库，适合 GitHub Pages、Cloudflare Pages、Netlify 等静态托管平台。
+
+## 如何工作
+
+文章由 `src/content/posts/` 中的 Markdown 文件驱动。构建时，框架会完成以下工作：
+
+1. 校验 frontmatter 和发布时间。
+2. 渲染文章正文、代码、公式、图表和嵌入内容。
+3. 根据文章与系列关系生成稳定的小镇布局。
+4. 输出文章页面、档案页面和小镇首页的静态文件。
+5. 在浏览器中只加载交互所需的 React 与 Babylon.js 运行时。
+
+如果不想逐栋探索，可以直接使用档案页、侧边栏列表、分类、标签或顶部搜索。
+
+<p align="center">
+  <img src="assets/readme/archive-view.png" alt="Town Blog Framework 文章档案页" width="100%" />
+</p>
 
 ## 快速开始
 
@@ -67,41 +113,41 @@ npm install
 npm run dev
 ```
 
-根据终端输出访问本地地址，即可预览小镇。后续可自行部署
+根据终端输出访问本地地址，即可预览小镇。
 
 ### 3. 开始定制
 
 1. 编辑 `src/config/site.ts`，填写网站名称、作者资料和正式域名。
 2. 替换 `public/assets/profile/` 中的 Logo 与头像占位图。
 3. 复制 `src/content/posts/_article-template.md.example`，创建第一篇文章。
-4. 在 `src/config/site.ts` 中启用需要展示的社交网站链接或友链。
-5. 运行完整检查并构建静态站点：
+4. 将文章图片与附件放入 `public/assets/posts/<文章 ID>/`。
+5. 在 `src/config/site.ts` 中启用需要展示的社交网站链接或友链。
+6. 运行完整检查并构建静态站点：
 
 ```bash
 npm run verify
 npm run build
 ```
 
-完整的字段、资源目录、文章 frontmatter、社交链接和部署说明，请阅读：
+完整的字段、资源目录、文章 frontmatter、Markdown 语法、社交链接和部署说明，请阅读：
 
 ➡️ [使用文档：docs/USAGE.md](docs/USAGE.md)
-
-## 预置社交网站 Logo
-
-框架已经在 `public/assets/links/` 中准备了国内外常用平台的向量 Logo，包括 GitHub、GitLab、X、Telegram、Discord、YouTube、Instagram、Threads、TikTok、微博、小红书、知乎、哔哩哔哩、Steam、Twitch、RSS、邮箱等。
-
-选择要展示的平台时，只需删除对应配置行前面的 `//`，然后填入自己的链接
 
 ## 项目结构
 
 ```text
-src/config/site.ts             站点、作者、相关链接与友链配置
-src/content/posts/             Markdown 文章
-public/assets/links/           预置及自定义相关网站 Logo
-public/assets/friends/         友链头像或 Logo
-public/assets/posts/           文章图片与附件
-public/assets/profile/         网站 Logo 与作者头像
-docs/USAGE.md                  面向使用者的完整文档
+src/config/site.ts                         站点、作者、相关链接与友链配置
+src/content/posts/                         Markdown 文章
+src/content/posts/_article-template.md.example 文章 frontmatter 与正文模板
+src/lib/markdown.ts                        Markdown 解析、分段和安全处理
+src/lib/markdown-rich.ts                   代码、公式与 Pele 图表渲染
+src/lib/markdown-embeds.ts                 文件与文章嵌入解析
+public/assets/links/                       预置及自定义相关网站 Logo
+public/assets/friends/                     友链头像或 Logo
+public/assets/posts/                       文章图片与附件
+public/assets/profile/                     网站 Logo 与作者头像
+assets/readme/                             README 展示截图与四季样例
+docs/USAGE.md                              面向使用者的完整文档
 ```
 
 ## 常用命令
@@ -111,5 +157,6 @@ npm run dev              # 启动开发服务器
 npm run check            # Astro 与 TypeScript 检查
 npm run build            # 构建静态站点
 npm run verify           # 完整检查、构建和小镇回归测试
+npm run verify:markdown  # 检查富 Markdown、嵌入与 HTML 安全过滤
 npm run preview          # 预览 dist/ 构建结果
 ```

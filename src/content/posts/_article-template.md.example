@@ -18,8 +18,22 @@ draft: true # 可选：true 为草稿；确认内容无误后改为 false。
 
 ## 二级标题
 
-正文段落。
+正文段落，单换行会保留为真实换行。
 
-![图片说明](/assets/posts/replace-with-a-unique-id/example.webp)
+- [ ] 待完成任务
+- [x] 已完成任务
+
+> [!blue] 阅读提示
+> 这里可以写一个带标题的提示框，也可以使用 `+` 或 `-` 控制默认展开状态。
+
+行内公式 $E = mc^2$。
+
+```ts
+console.log('Shiki 会根据语言高亮这段代码。');
+```
+
+[[另一篇文章]]
+
+![[/assets/posts/replace-with-a-unique-id/example.webp]]
 
 [下载附件](/assets/posts/replace-with-a-unique-id/files/example.zip)
