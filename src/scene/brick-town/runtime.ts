@@ -129,6 +129,11 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     ao.radius=0.35;ao.totalStrength=1.0;ao.samples=8;ao.expensiveBlur=false;
   });
   const postMap=new Map(posts.map(p=>[p.id,p]));
+  const postSearchText=new Map(posts.map(p=>[p.id,[p.title,p.description,p.category,...p.tags,p.series??'',p.searchText].join(' ').toLowerCase()]));
+  const houseByPostId=new Map<string,ReturnType<typeof buildHouse>>();
+  for(const house of houses)for(const id of house.ids)houseByPostId.set(id,house);
+  let articleMeshes=[...houseMeshes,...seasons.articleMeshes];
+  let highlightSignature='';
   let state={...initial};let frames=0;let elapsed=0;
   let inView=true,visible=!document.hidden,lastFrame=0;
   let weatherSlot=Math.floor(Date.now()/900000),rainy=weatherIsPrecipitating(layout.seed,weatherSlot);
@@ -166,22 +171,26 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       seasons.set(next.season,next.reducedMotion);seasonChanges++;
       for(const mesh of seasons.meshes){glow?.addExcludedMesh(mesh);if(!mesh.metadata.thinInstances)shadows.addShadowCaster(mesh);}
       shadows.getShadowMap()?.resetRefreshCounter();
+      articleMeshes=[...houseMeshes,...seasons.articleMeshes];
     }
     state={...next};if(rebuildPeople)populate();else if(seasonChanged)rebuildFigures();if(environmentChanged)lighting();
     if(state.reducedMotion)seasons.tick(0,true);
-    const needle=state.query.trim().toLowerCase();let hasHighlight=false;
-    for(const mesh of [...houseMeshes,...seasons.articleMeshes]){
-      const post=postMap.get(mesh.metadata.postId);if(!post)continue;
-      const matches=!!(needle||state.category||state.tag)&&(!needle||[post.title,post.description,post.category,...post.tags,post.series??''].join(' ').toLowerCase().includes(needle))&&(!state.category||post.category===state.category)&&(!state.tag||post.tags.includes(state.tag));
-      const direct=post.id===state.hoveredPostId||post.id===state.activePostId;
-      if(!highlights)continue;
-      if(direct||matches){highlights.addMesh(mesh,color(direct?'#90e3d4':'#edbb53'));hasHighlight=true;}else highlights.removeMesh(mesh);
+    const nextHighlightSignature=[state.query,state.category??'',state.tag??'',state.hoveredPostId??'',state.activePostId??'',state.season].join('\u0000');
+    if(highlights && nextHighlightSignature!==highlightSignature) {
+      const needle=state.query.trim().toLowerCase();let hasHighlight=false;
+      for(const mesh of articleMeshes){
+        const post=postMap.get(mesh.metadata.postId);if(!post)continue;
+        const matches=!!(needle||state.category||state.tag)&&(!needle||postSearchText.get(post.id)?.includes(needle))&&(!state.category||post.category===state.category)&&(!state.tag||post.tags.includes(state.tag));
+        const direct=post.id===state.hoveredPostId||post.id===state.activePostId;
+        if(direct||matches){highlights.addMesh(mesh,color(direct?'#90e3d4':'#edbb53'));hasHighlight=true;}else highlights.removeMesh(mesh);
+      }
+      highlights.isEnabled=hasHighlight;
+      highlightSignature=nextHighlightSignature;
     }
-    if(highlights)highlights.isEnabled=hasHighlight;
     if(state.hoveredPostId)anchor(state.hoveredPostId);
   }
   function anchor(id:string){
-    const house=houses.find(h=>h.ids.includes(id));if(!house)return;
+    const house=houseByPostId.get(id);if(!house)return;
     const i=house.ids.indexOf(id),point=new Vector3(house.plot.x,GROUND_Y+(i+0.6)*FLOOR_HEIGHT,house.plot.z);
     const rect=canvas.getBoundingClientRect();
     const p=Vector3.Project(point,Matrix.Identity(),scene.getTransformMatrix(),camera.viewport.toGlobal(engine.getRenderWidth(),engine.getRenderHeight()));

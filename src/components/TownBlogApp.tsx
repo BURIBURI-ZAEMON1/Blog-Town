@@ -16,6 +16,8 @@ type ColorMode = 'day' | 'night';
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 type Props = { posts: TownPost[]; layout: TownLayout; initialSurface?: MainSurface; initialPostId?: string };
+const ARTICLE_HEADING_TAGS: Record<number, ElementType> = { 1: 'h2', 2: 'h3', 3: 'h4', 4: 'h5', 5: 'h6', 6: 'h6' };
+type TownMapModel = ReturnType<typeof createTownMapModel>;
 
 const TownScene = lazy(async () => {
   // Fetch the large Babylon runtime in parallel with the React scene wrapper,
@@ -138,7 +140,6 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const recentRef = useRef<HTMLElement>(null);
   const mainSurfaceRef = useRef<HTMLDivElement>(null);
 
   const postMap = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);
@@ -286,6 +287,10 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
     const path = nextSurface === 'article' && postId
       ? `/posts/${encodeURIComponent(postId)}/`
       : nextSurface === 'archive' ? '/posts/' : '/';
+    // A visible entry can point back to the page that is already open (for
+    // example, the current item in a series drawer). Do not create a second
+    // browser-history entry for the same canonical route.
+    if (window.location.pathname === path && !window.location.search) return;
     window.history.pushState({ surface: nextSurface, postId }, '', path);
   };
 
@@ -468,10 +473,10 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           <p className="mobile-town-hint">点击建筑预览，再次点击或选择「阅读文章」打开；横向拖动地图，纵向滑动页面。</p>
           <div className="town-mobile-support">
             <div className="town-caption"><span><i className="caption-dot" /> {siteConfig.title} · {SEASON_PROFILES[season].label}季小镇</span><span>建筑即文章 / {layout.plots.length} buildings / {posts.length} article floors</span><span className="caption-spacer" /><button onClick={() => navigate('archive')}>打开完整档案 {icon('arrow')}</button></div>
-            <RecentPosts posts={filteredPosts.slice(0, 5)} hasFilter={Boolean(query || activeCategory || activeTag)} onOpen={openArticle} onClear={clearFilters} sectionRef={recentRef} />
+            <RecentPosts posts={filteredPosts.slice(0, 5)} hasFilter={Boolean(query || activeCategory || activeTag)} onOpen={openArticle} onClear={clearFilters} />
           </div>
         </section>}
-        {surface === 'archive' && <ArchiveView posts={filteredPosts} compact={false} onOpen={openArticle} />}
+        {surface === 'archive' && <ArchiveView posts={filteredPosts} onOpen={openArticle} />}
         {surface === 'article' && selectedPost && <ArticleView post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
         {surface === 'article' && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
@@ -495,14 +500,14 @@ function SearchDropdown({ results, activeIndex, onHover, onOpen, onArchive }: { 
 
 function TownTooltip({ post, anchor }: { post?: TownPost; anchor?: SceneAnchor }) { if (!post || !anchor) return null; const position = anchor; return <div className="town-tooltip" style={{ left: position.x, top: position.y }}><div className="tooltip-meta"><span>{post.category}</span><span>{post.readingTime} min</span></div><strong>{post.title}</strong><p>{post.description}</p><div className="tooltip-tags">{post.tags.slice(0, 3).map((tag) => <span key={tag}>#{tag}</span>)}</div></div>; }
 
-function RecentPosts({ posts, hasFilter, onOpen, onClear, sectionRef }: { posts: TownPost[]; hasFilter: boolean; onOpen: (id: string) => void; onClear: () => void; sectionRef: React.RefObject<HTMLElement | null> }) { return <section className="recent-posts" ref={sectionRef}><header><div><span className="section-eyebrow">RECENT NOTES</span><h2>{hasFilter ? '当前筛选下的最近笔记' : '最近写下的几件事'}</h2></div><span className="recent-count">{String(posts.length).padStart(2, '0')} / notes</span></header>{posts.length ? <div className="recent-grid">{posts.map((post) => <button key={post.id} className="recent-card" onClick={() => onOpen(post.id)}><span className="card-top"><span>{post.category}</span><span>{formatDate(post.date)}</span></span><strong>{post.title}</strong><p>{post.description}</p><span className="card-bottom">#{post.tags[0]} <i /> 阅读 {post.readingTime} 分钟 {icon('arrow')}</span></button>)}</div> : <EmptyView title="这条路暂时没有笔记" copy="换一个筛选条件，或者回到地图看看别的房子。" action="清除筛选" onAction={onClear} />}</section>; }
+function RecentPosts({ posts, hasFilter, onOpen, onClear }: { posts: TownPost[]; hasFilter: boolean; onOpen: (id: string) => void; onClear: () => void }) { return <section className="recent-posts"><header><div><span className="section-eyebrow">RECENT NOTES</span><h2>{hasFilter ? '当前筛选下的最近笔记' : '最近写下的几件事'}</h2></div><span className="recent-count">{String(posts.length).padStart(2, '0')} / notes</span></header>{posts.length ? <div className="recent-grid">{posts.map((post) => <button key={post.id} className="recent-card" onClick={() => onOpen(post.id)}><span className="card-top"><span>{post.category}</span><span>{formatDate(post.date)}</span></span><strong>{post.title}</strong><p>{post.description}</p><span className="card-bottom">#{post.tags[0]} <i /> 阅读 {post.readingTime} 分钟 {icon('arrow')}</span></button>)}</div> : <EmptyView title="这条路暂时没有笔记" copy="换一个筛选条件，或者回到地图看看别的房子。" action="清除筛选" onAction={onClear} />}</section>; }
 
 function ArchiveHeading({ postCount }: { postCount: number }) {
   return <header className="archive-heading archive-shell-heading"><div><span className="section-eyebrow">THE ARCHIVE · {String(postCount).padStart(2, '0')} NOTES</span><h1>文章档案</h1></div></header>;
 }
 
-function ArchiveView({ posts, compact, onOpen }: { posts: TownPost[]; compact: boolean; onOpen: (id: string) => void }) {
-  return <section className={`archive-page ${compact ? 'is-filtered-view' : ''}`}>
+function ArchiveView({ posts, onOpen }: { posts: TownPost[]; onOpen: (id: string) => void }) {
+  return <section className="archive-page">
     <div className="archive-list" aria-live="polite">{posts.map((post, index) => <button key={post.id} className={`archive-row ${post.cover ? 'has-cover' : ''}`} onClick={() => onOpen(post.id)}>{post.cover ? <span className="archive-cover"><img src={post.cover} alt="" loading="lazy" /></span> : <span className="archive-index">{String(index + 1).padStart(2, '0')}</span>}<span className="archive-copy"><strong>{post.title}</strong><small>{post.description}</small><em>{post.category} · {post.tags.slice(0, 2).map((tag) => `#${tag}`).join('  ')}</em></span><time>{formatDate(post.date)}</time>{icon('arrow')}</button>)}</div>
     {!posts.length && <div className="archive-empty"><h2>这里暂时没有文章</h2><p>再次点击当前选项即可取消筛选，或者选择上方的其他分类与标签。</p></div>}
   </section>;
@@ -511,11 +516,12 @@ function ArchiveView({ posts, compact, onOpen }: { posts: TownPost[]; compact: b
 type ArticleHeading = NonNullable<TownPost['sections'][number]['heading']>;
 
 function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen }: { post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
-  const headings = post.sections.flatMap((section) => section.heading ? [section.heading] : []);
+  const headings = useMemo(() => post.sections.flatMap((section) => section.heading ? [section.heading] : []), [post.sections]);
+  const townMap = useMemo(() => createTownMapModel(layout, post.id), [layout, post.id]);
   const seriesIndex = seriesPosts.findIndex((item) => item.id === post.id);
   const previousSeriesPost = seriesIndex > 0 ? seriesPosts[seriesIndex - 1] : undefined;
   const nextSeriesPost = seriesIndex >= 0 && seriesIndex < seriesPosts.length - 1 ? seriesPosts[seriesIndex + 1] : undefined;
-  const headingKey = headings.map((heading) => heading.id).join('|');
+  const headingKey = useMemo(() => headings.map((heading) => heading.id).join('|'), [headings]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [activeHeadingId, setActiveHeadingId] = useState<string | undefined>(headings[0]?.id);
   const [readingProgress, setReadingProgress] = useState(0);
@@ -613,11 +619,12 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen }: { post: 
       if (!headings.length) return;
       const rootTop = root.getBoundingClientRect().top;
       const readingLine = rootTop + 118;
+      const headingElements = headings.map((heading) => document.getElementById(heading.id));
       let next = headings[0]?.id;
-      for (const heading of headings) {
-        const element = document.getElementById(heading.id);
+      for (let index = 0; index < headings.length; index += 1) {
+        const element = headingElements[index];
         if (!element || element.offsetParent === null) continue;
-        if (element.getBoundingClientRect().top <= readingLine) next = heading.id;
+        if (element.getBoundingClientRect().top <= readingLine) next = headings[index].id;
         else break;
       }
       setActiveHeadingId((current) => current === next ? current : next);
@@ -635,28 +642,25 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen }: { post: 
     };
   }, [collapsed, headingKey, headings.length, scrollRoot]);
 
-  const hiddenByCollapsedAncestor = (index: number) => {
-    const currentLevel = post.sections[index].heading?.level;
-    const activeLevels: number[] = [];
-    for (let cursor = 0; cursor < index; cursor += 1) {
-      const heading = post.sections[cursor].heading;
-      if (!heading) continue;
-      while (activeLevels.length && activeLevels[activeLevels.length - 1] >= heading.level) activeLevels.pop();
-      if (collapsed[heading.id]) activeLevels.push(heading.level);
-    }
-    if (currentLevel) {
-      while (activeLevels.length && activeLevels[activeLevels.length - 1] >= currentLevel) activeLevels.pop();
-    }
-    return activeLevels.length > 0;
-  };
+  const hiddenSections = useMemo(() => {
+    const collapsedLevels: number[] = [];
+    return post.sections.map((section) => {
+      const level = section.heading?.level;
+      if (level) {
+        while (collapsedLevels.length && collapsedLevels[collapsedLevels.length - 1] >= level) collapsedLevels.pop();
+      }
+      const hidden = collapsedLevels.length > 0;
+      if (section.heading && collapsed[section.heading.id]) collapsedLevels.push(section.heading.level);
+      return hidden;
+    });
+  }, [collapsed, post.sections]);
 
   return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-rule" /><div className="article-body">{post.sections.map((section, index) => {
-    const ancestorHidden = hiddenByCollapsedAncestor(index);
+    const ancestorHidden = hiddenSections[index];
     const ownCollapsed = section.heading ? Boolean(collapsed[section.heading.id]) : false;
-    const headingTags: Record<number, ElementType> = { 1: 'h2', 2: 'h3', 3: 'h4', 4: 'h5', 5: 'h6', 6: 'h6' };
-    const Heading = section.heading ? headingTags[Math.min(section.heading.level, 6)] : undefined;
+    const Heading = section.heading ? ARTICLE_HEADING_TAGS[Math.min(section.heading.level, 6)] : undefined;
     return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id} {...(section.heading.html ? { dangerouslySetInnerHTML: { __html: section.heading.html } } : { children: section.heading.text })} /><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <div className="article-section-content" dangerouslySetInnerHTML={{ __html: section.html }} />}</section>;
-  })}</div><div className="article-footer"><span>townId · {post.id}</span><span>／</span><span>{siteConfig.shortTitle} · map 01</span></div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <button onClick={() => onOpen(previousSeriesPost.id)}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></button> : <span />}{nextSeriesPost ? <button onClick={() => onOpen(nextSeriesPost.id)}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></button> : <span />}</div></div>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} layout={layout} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
+  })}</div><div className="article-footer"><span>townId · {post.id}</span><span>／</span><span>{siteConfig.shortTitle} · map 01</span></div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <button onClick={() => onOpen(previousSeriesPost.id)}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></button> : <span />}{nextSeriesPost ? <button onClick={() => onOpen(nextSeriesPost.id)}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></button> : <span />}</div></div>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} map={townMap} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
 }
 
 function SeriesDrawer({ posts, selectedPostId, onOpenArticle }: { posts: TownPost[]; selectedPostId: string; onOpenArticle: (id: string) => void }) {
@@ -724,8 +728,7 @@ function ArticleContents({ headings, activeHeadingId, readingProgress }: Article
 }
 
 
-function MiniTownMap({ post, layout }: { post: TownPost; layout: TownLayout }) {
-  const map = createTownMapModel(layout, post.id);
+function MiniTownMap({ post, map }: { post: TownPost; map: TownMapModel }) {
   const path = (points: { x: number; z: number }[]) => points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.z}`).join(' ');
   const polygonFor = (building: typeof map.buildings[number]) => building.points?.map((point) => `${point.x},${point.z}`).join(' ') ?? '';
   return <div className="article-location" aria-label={`文章建筑在小镇中的位置：${post.title}`}>
