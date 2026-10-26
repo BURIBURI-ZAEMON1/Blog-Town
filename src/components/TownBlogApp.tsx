@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ElementType } from 'react';
 import type { SceneAnchor, TownPost } from './TownScene';
 import TownLoading from './TownLoading';
@@ -13,6 +13,7 @@ import { getSeasonForDate, SEASON_ORDER, SEASON_PROFILES, type Season } from '..
 type SidebarPanel = 'profile' | 'list' | 'categories' | 'category-posts' | 'tags' | 'tag-posts' | 'friends';
 type MainSurface = 'town' | 'article' | 'archive';
 type ColorMode = 'day' | 'night';
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 type ReturnContext = {
   surface: MainSurface;
@@ -564,11 +565,88 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onBack, onOpen }: 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [activeHeadingId, setActiveHeadingId] = useState<string | undefined>(headings[0]?.id);
   const [readingProgress, setReadingProgress] = useState(0);
+  const collapsedEmbeds = useRef(new Set<string>());
   useEffect(() => {
     setCollapsed({});
+    collapsedEmbeds.current.clear();
     setActiveHeadingId(headings[0]?.id);
     setReadingProgress(0);
   }, [post.id]);
+  useIsomorphicLayoutEffect(() => {
+    const article = document.querySelector<HTMLElement>('.article-page');
+    if (!article) return;
+    article.querySelectorAll<HTMLElement>('[data-embed-key]').forEach((container) => {
+      const key = container.dataset.embedKey;
+      const collapsed = Boolean(key && collapsedEmbeds.current.has(key));
+      container.classList.toggle('is-collapsed', collapsed);
+      container.querySelector<HTMLElement>(':scope > .embed-note-summary, :scope > .embed-file-summary')?.setAttribute('aria-expanded', String(!collapsed));
+    });
+  });
+  useEffect(() => {
+    const root = scrollRoot.current;
+    const article = document.querySelector<HTMLElement>('.article-page');
+    if (!root || !article) return;
+    let restoreFrame: number | undefined;
+    const getSummary = (event: Event) => {
+      const target = event.target as Element | null;
+      return target?.closest<HTMLElement>('.article-embed-note > .embed-note-summary, .article-file-embed > .embed-file-summary');
+    };
+    const toggleEmbed = (summary: HTMLElement, event: Event) => {
+      if ((event.target as Element | null)?.closest('a')) return;
+      const container = summary.parentElement;
+      if (!container) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rootTop = root.scrollTop;
+      const summaryTop = summary.getBoundingClientRect().top;
+      const aside = article.querySelector<HTMLElement>('.article-aside');
+      const asideTop = aside?.scrollTop ?? 0;
+      const previousAnchor = root.style.overflowAnchor;
+      const collapsed = container.classList.toggle('is-collapsed');
+      const key = container.dataset.embedKey;
+      if (key) {
+        if (collapsed) collapsedEmbeds.current.add(key);
+        else collapsedEmbeds.current.delete(key);
+      }
+      summary.setAttribute('aria-expanded', String(!collapsed));
+      root.style.overflowAnchor = 'none';
+      const restore = () => {
+        const currentSummaryTop = summary.getBoundingClientRect().top;
+        const anchorDelta = currentSummaryTop - summaryTop;
+        root.scrollTop = Math.max(0, root.scrollTop + anchorDelta);
+        // Keep the original position when the new document height allows it;
+        // otherwise the browser's maximum is the only valid scroll position.
+        if (Math.abs(anchorDelta) < 1) root.scrollTop = Math.min(rootTop, root.scrollHeight - root.clientHeight);
+        if (aside) aside.scrollTop = asideTop;
+      };
+      restore();
+      if (restoreFrame !== undefined) window.cancelAnimationFrame(restoreFrame);
+      restoreFrame = window.requestAnimationFrame(() => {
+        restore();
+        restoreFrame = window.requestAnimationFrame(() => {
+          restore();
+          root.style.overflowAnchor = previousAnchor;
+          restoreFrame = undefined;
+        });
+      });
+    };
+    const onClick = (event: MouseEvent) => {
+      const summary = getSummary(event);
+      if (summary) toggleEmbed(summary, event);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const summary = getSummary(event);
+      if (summary) toggleEmbed(summary, event);
+    };
+    article.addEventListener('click', onClick, true);
+    article.addEventListener('keydown', onKeyDown, true);
+    return () => {
+      article.removeEventListener('click', onClick, true);
+      article.removeEventListener('keydown', onKeyDown, true);
+      if (restoreFrame !== undefined) window.cancelAnimationFrame(restoreFrame);
+    };
+  }, [post.id, scrollRoot]);
   useEffect(() => {
     const root = scrollRoot.current;
     if (!root) return;
@@ -623,7 +701,7 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onBack, onOpen }: 
     const ownCollapsed = section.heading ? Boolean(collapsed[section.heading.id]) : false;
     const headingTags: Record<number, ElementType> = { 1: 'h2', 2: 'h3', 3: 'h4', 4: 'h5', 5: 'h6', 6: 'h6' };
     const Heading = section.heading ? headingTags[Math.min(section.heading.level, 6)] : undefined;
-    return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id}>{section.heading.text}</Heading><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <div className="article-section-content" dangerouslySetInnerHTML={{ __html: section.html }} />}</section>;
+    return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id} {...(section.heading.html ? { dangerouslySetInnerHTML: { __html: section.heading.html } } : { children: section.heading.text })} /><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <div className="article-section-content" dangerouslySetInnerHTML={{ __html: section.html }} />}</section>;
   })}</div><div className="article-footer"><span>townId · {post.id}</span><span>／</span><span>{siteConfig.shortTitle} · map 01</span></div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <button onClick={() => onOpen(previousSeriesPost.id)}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></button> : <span />}{nextSeriesPost ? <button onClick={() => onOpen(nextSeriesPost.id)}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></button> : <span />}</div></div>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} layout={layout} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
 }
 
