@@ -121,7 +121,7 @@ npm run dev
 
 1. 编辑 `src/config/site.ts`，填写网站名称、作者资料和正式域名。
 2. 替换 `public/assets/profile/` 中的 Logo 与头像占位图。
-3. 复制 `src/content/posts/_article-template.md.example`，创建第一篇文章。
+3. 在项目根目录运行 `pnpm new "My First Post"`，快速创建包含基础 Frontmatter 的 Markdown 草稿（也支持 `npm run new -- "My First Post"`）。
 4. 将文章图片与附件放入 `public/assets/posts/<文章 ID>/`。
 5. 在 `src/config/site.ts` 中启用需要展示的社交网站链接或友链。
 6. 运行完整检查并构建静态站点：
@@ -130,6 +130,8 @@ npm run dev
 npm run verify
 npm run build
 ```
+
+发文命令会生成 `src/content/posts/my-first-post.md`，自动填写永久 ID、带本地时区的当前日期和草稿状态；补齐标题、摘要等信息后即可开始写作。
 
 完整的字段、资源目录、文章 frontmatter、Markdown 语法、社交链接和部署说明，请阅读：
 
@@ -155,6 +157,7 @@ docs/USAGE.md                              面向使用者的完整文档
 ## 常用命令
 
 ```bash
+pnpm new "My First Post" # 创建包含基础 Frontmatter 的 Markdown 草稿
 npm run dev              # 启动开发服务器
 npm run check            # Astro 与 TypeScript 检查
 npm run build            # 构建静态站点

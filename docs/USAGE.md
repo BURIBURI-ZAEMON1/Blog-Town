@@ -144,7 +144,18 @@ export const friendLinks: FriendLink[] = [
 src/content/posts/
 ```
 
-仓库提供了不会被构建系统读取的模板：
+在项目根目录运行发文命令，快速创建包含基础 Frontmatter 的 Markdown 草稿：
+
+```bash
+pnpm new "My New Post"
+# 也支持 npm run new -- "My New Post"
+```
+
+命令会生成 `src/content/posts/my-new-post.md`，自动填写 `townId: post-my-new-post`、带本地时区的当前日期和 `draft: true`，并预留标题、摘要、分类、标签与封面字段。英文文件名会转为小写，空格和下划线替换为 `-`；也可带 `.md` 后缀。已有同名文件不会被覆盖。
+
+内容校验也会检查草稿。请补齐必填字段和空标签项；不需要标签时改为 `tags: []`，不需要封面时删除 `cover` 和 `coverAlt`。准备发布后将 `draft` 改为 `false`。
+
+如需带详细字段注释的版本，仓库还提供了不会被构建系统读取的模板：
 
 ```text
 src/content/posts/_article-template.md.example
@@ -235,6 +246,7 @@ src/scene/brick-town/                  Babylon.js 小镇渲染代码
 ## 9. 常用命令
 
 ```bash
+pnpm new "My New Post"   # 创建包含基础 Frontmatter 的 Markdown 草稿
 npm run dev              # 启动开发服务器
 npm run check            # Astro 与 TypeScript 检查
 npm run build            # 构建静态站点
