@@ -492,3 +492,48 @@ SVG 颜色随站点主题调整。图表中的图片、外部链接和点击脚�
 
 独占一行的 `![[...]]` 文件或文章嵌入会显示一个轻量标题栏。点击右侧小箭头可以展开或收起全部嵌入内容；文章嵌入标题中的文章名称仍可直接点击跳转。行内嵌入（例如段落中的小图片）保持行内显示，不增加折叠容器。
 
+
+## 14. 可选文章评论（Giscus）
+
+框架预留了文章底部的 Giscus 评论区，**默认关闭**。不开启时不显示评论标题或占位区域，也不会加载评论组件或请求 Giscus。要使用评论，完成以下配置即可，无需安装额外依赖。
+
+### 配置自己的仓库
+
+1. 准备一个公开的 GitHub 仓库，在该仓库的 Settings → General → Features 中开启 Discussions。评论仓库可以与博客源码仓库相同，也可以单独建立。
+2. 在 [Giscus 配置页](https://giscus.app/zh-CN) 按指引安装 Giscus App，并授权它访问评论仓库。
+3. 在配置页选择仓库和 Discussion 分类，建议使用只允许维护者发起讨论的 Announcements 分类。复制生成配置中的 `data-repo`、`data-repo-id`、`data-category`、`data-category-id`。
+4. 将四项对应填入 `src/config/comments.ts` 的 `repo`、`repoId`、`category`、`categoryId`。这些都是公开标识，**不需要填写 GitHub Token**。模板中未预填原作者的评论仓库。
+5. 确认 `src/config/site.ts` 中的 `siteUrl` 已填写为自己的正式站点地址，用于讨论中的原文链接。
+
+### 启用与关闭
+
+`src/config/comments.ts` 中的启用代码默认注释：
+
+```ts
+export const commentConfig: CommentConfig = {
+  // enabled: true,
+  // 下方为仓库、分类和主题配置……
+};
+```
+
+填写仓库配置后，将 `// enabled: true,` 改为 `enabled: true,`，然后重新构建并部署，文章下方就会出现评论区。重新注释该行即可关闭；关闭不会删除 GitHub 中已有的讨论。
+
+框架按文章永久 `townId` 精确关联讨论，无需修改组件中的映射方式。已发布文章应保留原 `townId`，避免评论关联到新的讨论。首次评论或回应时由 Giscus 建立对应讨论，单纯浏览不会创建空讨论。
+
+评论区在接近文章底部时才加载，支持日夜主题切换；正文阅读进度不包含评论区。读者可直接阅读，登录 GitHub 并授权 Giscus 后即可评论或回应。GitHub 授权会话保存在浏览器本地的 `giscus-session` 中；评论不可用时可重试或前往 GitHub Discussions。
+
+### 本地检查（可选）
+
+启动开发服务后，可检查默认关闭状态。检查需要至少两篇已发布文章，以及 Playwright 浏览器或本机 Chrome：
+
+```bash
+PLAYWRIGHT_CHANNEL=chrome npm run verify:giscus-ui
+```
+
+填好配置并启用评论后，使用以下命令检查懒加载、失败重试、文章映射、主题切换和登录回跳：
+
+```bash
+PLAYWRIGHT_CHANNEL=chrome npm run verify:giscus-ui -- --enabled
+```
+
+两种检查均使用模拟评论服务，不会发布真实评论。若服务运行在其他地址，可添加 `TOWN_BLOG_TEST_URL=http://127.0.0.1:4325` 指定地址。

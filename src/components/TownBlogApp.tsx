@@ -2,6 +2,7 @@ import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRe
 import type { ElementType } from 'react';
 import type { SceneAnchor, TownPost } from './TownScene';
 import TownLoading from './TownLoading';
+import { commentConfig } from '../config/comments';
 import { showReferenceArrival } from './article-reference-arrival';
 import { useTownNavigation, type MainSurface, type TownNavigation } from './useTownNavigation';
 import { useNewPostIds } from './useNewPostIds';
@@ -19,6 +20,8 @@ const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : us
 type Props = { posts: TownPost[]; layout: TownLayout; initialSurface?: MainSurface; initialPostId?: string };
 const ARTICLE_HEADING_TAGS: Record<number, ElementType> = { 1: 'h2', 2: 'h3', 3: 'h4', 4: 'h5', 5: 'h6', 6: 'h6' };
 type TownMapModel = ReturnType<typeof createTownMapModel>;
+
+const ArticleComments = lazy(() => import('./ArticleComments'));
 
 const TownScene = lazy(async () => {
   // Fetch the large Babylon runtime in parallel with the React scene wrapper,
@@ -448,7 +451,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           </div>
         </section>}
         {surface === 'archive' && <ArchiveView posts={filteredPosts} onOpen={openArticle} />}
-        {surface === 'article' && selectedPost && <ArticleView navigation={navigation} post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
+        {surface === 'article' && selectedPost && <ArticleView colorMode={colorMode} navigation={navigation} post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
         {surface === 'article' && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
       </main>
@@ -492,7 +495,7 @@ const ArticleSectionContent = memo(function ArticleSectionContent({ html }: { ht
 
 type ArticleHeading = NonNullable<TownPost['sections'][number]['heading']>;
 
-function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation }: { navigation: TownNavigation; post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
+function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation, colorMode }: { colorMode: ColorMode; navigation: TownNavigation; post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
   const headings = useMemo(() => post.sections.flatMap((section) => section.heading ? [section.heading] : []), [post.sections]);
   const townMap = useMemo(() => createTownMapModel(layout, post.id), [layout, post.id]);
   const seriesIndex = seriesPosts.findIndex((item) => item.id === post.id);
@@ -528,7 +531,7 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
       }
       let target: HTMLElement | null = null;
       try { target = navigation.hash ? document.getElementById(decodeURIComponent(navigation.hash.slice(1))) : null; } catch { /* Malformed fragments fall back to the article start. */ }
-      if (!target || !target.closest('.article-body')) {
+      if (!target || (!target.closest('.article-body') && target.id !== 'article-comments')) {
         root.scrollTo({ top: 0, behavior: 'instant' });
         return;
       }
@@ -544,7 +547,7 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
       const top = root.scrollTop + target.getBoundingClientRect().top - root.getBoundingClientRect().top - 136;
       root.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
       const body = article.querySelector<HTMLElement>('.article-body');
-      if (body) clearArrival = showReferenceArrival(target, body, post.sections);
+      if (body?.contains(target)) clearArrival = showReferenceArrival(target, body, post.sections);
     });
     return () => { window.cancelAnimationFrame(frame); clearArrival?.(); };
   }, [navigation, post.id, scrollRoot]);
@@ -629,11 +632,13 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
     let frame: number | undefined;
     const updateReadingState = () => {
       frame = undefined;
-      const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight);
-      const progress = maxScroll === 0 ? 0 : Math.min(1, Math.max(0, root.scrollTop / maxScroll));
+      const body = root.querySelector('.article-body');
+      const rootTop = root.getBoundingClientRect().top;
+      // Comments and series links are outside the article's reading range.
+      const readingEnd = Math.max(0, body ? root.scrollTop + body.getBoundingClientRect().bottom - rootTop - root.clientHeight : root.scrollHeight - root.clientHeight);
+      const progress = readingEnd === 0 ? Number(root.scrollTop > 0) : Math.min(1, Math.max(0, root.scrollTop / readingEnd));
       setReadingProgress(Math.round(progress * 100));
       if (!headings.length) return;
-      const rootTop = root.getBoundingClientRect().top;
       const readingLine = rootTop + 118;
       const headingElements = headings.map((heading) => document.getElementById(heading.id));
       let next = headings[0]?.id;
@@ -651,12 +656,16 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
     updateReadingState();
     root.addEventListener('scroll', requestUpdate, { passive: true });
     window.addEventListener('resize', requestUpdate);
+    const resizeObserver = new ResizeObserver(requestUpdate);
+    const body = root.querySelector('.article-body');
+    if (body) resizeObserver.observe(body);
     return () => {
+      resizeObserver.disconnect();
       root.removeEventListener('scroll', requestUpdate);
       window.removeEventListener('resize', requestUpdate);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
     };
-  }, [collapsed, headingKey, headings.length, scrollRoot]);
+  }, [collapsed, headingKey, headings.length, post.id, scrollRoot]);
 
   const hiddenSections = useMemo(() => {
     const collapsedLevels: number[] = [];
@@ -671,12 +680,13 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
     });
   }, [collapsed, post.sections]);
 
-  return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-rule" /><div className="article-body">{post.sections.map((section, index) => {
+  // Keep the comment anchor available during lazy loading for sign-in return links.
+  return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-body">{post.sections.map((section, index) => {
     const ancestorHidden = hiddenSections[index];
     const ownCollapsed = section.heading ? Boolean(collapsed[section.heading.id]) : false;
     const Heading = section.heading ? ARTICLE_HEADING_TAGS[Math.min(section.heading.level, 6)] : undefined;
     return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id} {...(section.heading.html ? { dangerouslySetInnerHTML: { __html: section.heading.html } } : { children: section.heading.text })} /><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <ArticleSectionContent html={section.html} />}</section>;
-  })}</div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <button onClick={() => onOpen(previousSeriesPost.id)}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></button> : <span />}{nextSeriesPost ? <button onClick={() => onOpen(nextSeriesPost.id)}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></button> : <span />}</div></div>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} map={townMap} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
+  })}</div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <button onClick={() => onOpen(previousSeriesPost.id)}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></button> : <span />}{nextSeriesPost ? <button onClick={() => onOpen(nextSeriesPost.id)}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></button> : <span />}</div></div>}{commentConfig.enabled && <Suspense fallback={<section id="article-comments" className="article-comments" aria-label="正在加载评论" />}><ArticleComments key={post.id} postId={post.id} title={post.title} colorMode={colorMode} scrollRoot={scrollRoot} /></Suspense>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} map={townMap} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
 }
 
 function SeriesDrawer({ posts, selectedPostId, onOpenArticle }: { posts: TownPost[]; selectedPostId: string; onOpenArticle: (id: string) => void }) {
