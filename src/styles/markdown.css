@@ -76,10 +76,10 @@
 .article-section-content pre.shiki[data-language]::before { content: attr(data-language); position: absolute; top: 10px; right: 14px; color: var(--muted); font-family: var(--sans); font-size: 10px; font-weight: 600; letter-spacing: .08em; line-height: 1; text-transform: none; opacity: .82; }
 .mode-night .article-section-content pre.shiki[data-language]::before { color: #b9c8c3; opacity: .9; }
 
-.article-section-content .article-wikilink { color: var(--sage); text-decoration-style: dashed; text-decoration-color: color-mix(in srgb, currentColor 60%, transparent); }
-.article-section-content .article-wikilink::after { content: '↗'; display: inline-block; margin-inline-start: .28em; font-family: var(--sans); font-size: .78em; text-decoration: none; }
-.article-section-content .article-wikilink-file { color: #6b7280; }
-.article-section-content .article-wikilink-missing { color: var(--muted); text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
+.article-section-content .article-content-ref { color: var(--sage); text-decoration-style: dashed; text-decoration-color: color-mix(in srgb, currentColor 60%, transparent); }
+.article-section-content .article-content-ref::after { content: '↗'; display: inline-block; margin-inline-start: .28em; font-family: var(--sans); font-size: .78em; text-decoration: none; }
+.article-section-content .article-content-ref-file { color: #6b7280; }
+.article-section-content .article-content-ref-missing { color: var(--muted); text-decoration: underline dotted; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
 
 .article-section-content .article-embed-note,
 .article-section-content .article-file-embed { margin: 26px 0; padding: 0; border: 1px solid #d5d9d2; border-radius: 10px; background: #fbfcf8; box-shadow: 0 8px 24px rgba(43, 57, 50, .06); overflow: hidden; }
@@ -138,3 +138,10 @@
 .article-section-content .article-file-embed:not(.is-collapsed) > .embed-file-summary .embed-note-toggle { transform: rotate(225deg) translateY(-1px); }
 .article-section-content .article-embed-note.is-collapsed > .embed-note-summary .embed-note-toggle,
 .article-section-content .article-file-embed.is-collapsed > .embed-file-summary .embed-note-toggle { transform: rotate(45deg) translateY(-2px); }
+
+/* Keep the arrival wash behind content; authored highlight colors stay intact. */
+.article-page { --reference-highlight: rgba(113, 187, 255, .3); }
+.mode-night .article-page { --reference-highlight: rgba(104, 181, 255, .24); }
+.article-reference-anchor { display: block; height: 0; scroll-margin-top: 136px; }
+.article-body { position: relative; isolation: isolate; }
+.article-reference-wash { position: absolute; z-index: -1; pointer-events: none; border-radius: 9px; background: var(--reference-highlight); }

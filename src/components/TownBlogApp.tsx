@@ -2,6 +2,8 @@ import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRe
 import type { ElementType } from 'react';
 import type { SceneAnchor, TownPost } from './TownScene';
 import TownLoading from './TownLoading';
+import { showReferenceArrival } from './article-reference-arrival';
+import { useTownNavigation, type MainSurface, type TownNavigation } from './useTownNavigation';
 import { useNewPostIds } from './useNewPostIds';
 import { useTownExploration } from './useTownExploration';
 import type { TownSceneProps } from '../scene/brick-town/types';
@@ -11,7 +13,6 @@ import { createTownMapModel } from '../data/town-map';
 import { getSeasonForDate, SEASON_ORDER, SEASON_PROFILES, type Season } from '../data/town-seasons';
 
 type SidebarPanel = 'profile' | 'list' | 'categories' | 'category-posts' | 'tags' | 'tag-posts' | 'friends';
-type MainSurface = 'town' | 'article' | 'archive';
 type ColorMode = 'day' | 'night';
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
@@ -103,10 +104,8 @@ const getScore = (post: TownPost, query: string) => {
 };
 
 export default function TownBlogApp({ posts, layout, initialSurface = 'town', initialPostId }: Props) {
-  const [surface, setSurface] = useState<MainSurface>(initialSurface);
   const initialPost = initialPostId ? posts.find((post) => post.id === initialPostId) : undefined;
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('profile');
-  const [selectedPostId, setSelectedPostId] = useState<string | undefined>(initialPost?.id);
   const [hoveredPostId, setHoveredPostId] = useState<string>();
   const [hoverAnchor, setHoverAnchor] = useState<SceneAnchor>();
   const [query, setQuery] = useState('');
@@ -141,6 +140,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const sidebarRef = useRef<HTMLElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const mainSurfaceRef = useRef<HTMLDivElement>(null);
+  const { navigation, navigate: navigateTo } = useTownNavigation(posts, mainSurfaceRef, initialSurface, initialPost?.id);
+  const { surface, postId: selectedPostId } = navigation;
 
   const postMap = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);
   const sortedPosts = useMemo(() => [...posts].sort((a, b) => +new Date(b.date) - +new Date(a.date)), [posts]);
@@ -159,6 +160,9 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
     .slice(0, 6)
     .map((result) => result.post), [query, sortedPosts]);
   const selectedPost = selectedPostId ? postMap.get(selectedPostId) : undefined;
+  useEffect(() => {
+    document.title = selectedPost ? `${selectedPost.title} · ${siteConfig.title}` : surface === 'archive' ? `全部文章 · ${siteConfig.title}` : siteConfig.title;
+  }, [selectedPost, surface]);
   const newPostIds = useNewPostIds(posts, surface === 'article' ? selectedPost?.id : undefined);
   const { showGuide, markExplored } = useTownExploration();
   const guidePostId = showGuide ? sortedPosts[0]?.id : undefined;
@@ -168,14 +172,6 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const highlightCategory = previewCategory ?? activeCategory;
   const highlightTag = previewTag ?? activeTag;
   const sidebarPosts = sidebarPanel === 'category-posts' ? sortedPosts.filter((post) => post.category === sidebarCategory) : sidebarPanel === 'tag-posts' ? sortedPosts.filter((post) => sidebarTag && post.tags.includes(sidebarTag)) : sortedPosts;
-
-  useEffect(() => {
-    if (surface !== 'article' || !selectedPostId) return;
-    const frame = window.requestAnimationFrame(() => {
-      mainSurfaceRef.current?.scrollTo({ top: 0, behavior: 'auto' });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [selectedPostId, surface]);
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 720px)');
@@ -251,60 +247,22 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   }, []);
 
   useEffect(() => {
-    const readLocation = () => {
-      const parts = window.location.pathname.split('/').filter(Boolean);
-      if (parts[0] === 'posts' && parts[1]) {
-        const postId = decodeURIComponent(parts[1]);
-        return posts.some((post) => post.id === postId)
-          ? { surface: 'article' as const, postId }
-          : { surface: 'archive' as const, postId: undefined };
-      }
-      if (parts[0] === 'posts') return { surface: 'archive' as const, postId: undefined };
-
-      // Preserve old demo query links while canonical navigation uses real static paths.
-      const params = new URLSearchParams(window.location.search);
-      const legacyPost = params.get('post');
-      if (params.get('view') === 'article' && legacyPost && posts.some((post) => post.id === legacyPost)) {
-        return { surface: 'article' as const, postId: legacyPost };
-      }
-      if (params.get('view') === 'archive') return { surface: 'archive' as const, postId: undefined };
-      return { surface: 'town' as const, postId: undefined };
-    };
-
-    const initial = readLocation();
-    window.history.replaceState({ surface: initial.surface, postId: initial.postId, ...(window.history.state ?? {}) }, '', window.location.href);
-    setSurface(initial.surface);
-    setSelectedPostId(initial.postId);
-    setSidebarPanel('profile');
-
-    const onPopState = () => {
-      const next = readLocation();
-      setSurface(next.surface);
-      setSelectedPostId(next.postId);
-      setTouchPostId(undefined);
-      setSearchOpen(false);
-      setMobileSidebarOpen(false);
-      window.setTimeout(() => mainSurfaceRef.current?.scrollTo({ top: 0, behavior: 'auto' }), 0);
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, [posts]);
+    setMobileSidebarOpen(false);
+    setTouchPostId(undefined);
+    setSearchOpen(false);
+    inputRef.current?.blur();
+    setPreviewCategory(undefined);
+    setPreviewTag(undefined);
+    setHoveredPostId(undefined);
+    setHoverAnchor(undefined);
+  }, [navigation]);
 
   const navigate = (nextSurface: MainSurface, postId?: string) => {
     setMobileSidebarOpen(false);
     setTouchPostId(undefined);
     setSearchOpen(false);
     inputRef.current?.blur();
-    setSurface(nextSurface);
-    setSelectedPostId(postId);
-    const path = nextSurface === 'article' && postId
-      ? `/posts/${encodeURIComponent(postId)}/`
-      : nextSurface === 'archive' ? '/posts/' : '/';
-    // A visible entry can point back to the page that is already open (for
-    // example, the current item in a series drawer). Do not create a second
-    // browser-history entry for the same canonical route.
-    if (window.location.pathname === path && !window.location.search) return;
-    window.history.pushState({ surface: nextSurface, postId }, '', path);
+    navigateTo(nextSurface, postId);
   };
 
   const openArticle = (id: string) => {
@@ -490,7 +448,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           </div>
         </section>}
         {surface === 'archive' && <ArchiveView posts={filteredPosts} onOpen={openArticle} />}
-        {surface === 'article' && selectedPost && <ArticleView post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
+        {surface === 'article' && selectedPost && <ArticleView navigation={navigation} post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
         {surface === 'article' && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
       </main>
@@ -534,7 +492,7 @@ const ArticleSectionContent = memo(function ArticleSectionContent({ html }: { ht
 
 type ArticleHeading = NonNullable<TownPost['sections'][number]['heading']>;
 
-function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen }: { post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
+function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation }: { navigation: TownNavigation; post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
   const headings = useMemo(() => post.sections.flatMap((section) => section.heading ? [section.heading] : []), [post.sections]);
   const townMap = useMemo(() => createTownMapModel(layout, post.id), [layout, post.id]);
   const seriesIndex = seriesPosts.findIndex((item) => item.id === post.id);
@@ -545,12 +503,51 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen }: { post: 
   const [activeHeadingId, setActiveHeadingId] = useState<string | undefined>(headings[0]?.id);
   const [readingProgress, setReadingProgress] = useState(0);
   const collapsedEmbeds = useRef(new Set<string>());
-  useEffect(() => {
-    setCollapsed({});
-    collapsedEmbeds.current.clear();
+  const previousPostId = useRef<string | undefined>(undefined);
+  useIsomorphicLayoutEffect(() => {
+    const changedPost = previousPostId.current !== post.id;
+    previousPostId.current = post.id;
+    if (navigation.restore || changedPost) {
+      setCollapsed(Object.fromEntries((navigation.restore?.collapsed ?? []).map((id) => [id, true])));
+      collapsedEmbeds.current = new Set(navigation.restore?.embeds ?? []);
+    } else if (navigation.hash) setCollapsed({});
     setActiveHeadingId(headings[0]?.id);
     setReadingProgress(0);
-  }, [post.id]);
+    let clearArrival: (() => void) | undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const root = scrollRoot.current;
+      const article = root?.querySelector('.article-page');
+      if (!root || !article) return;
+      if (navigation.restore) {
+        article.querySelectorAll('details').forEach((detail, index) => {
+          const open = navigation.restore!.details[index];
+          if (open !== undefined) detail.open = open;
+        });
+        root.scrollTo({ top: navigation.restore.scrollTop, behavior: 'instant' });
+        return;
+      }
+      let target: HTMLElement | null = null;
+      try { target = navigation.hash ? document.getElementById(decodeURIComponent(navigation.hash.slice(1))) : null; } catch { /* Malformed fragments fall back to the article start. */ }
+      if (!target || !target.closest('.article-body')) {
+        root.scrollTo({ top: 0, behavior: 'instant' });
+        return;
+      }
+      for (let parent = target.parentElement; parent && parent !== root; parent = parent.parentElement) {
+        if (parent instanceof HTMLDetailsElement) parent.open = true;
+        if (parent.classList.contains('is-collapsed')) {
+          parent.classList.remove('is-collapsed');
+          const key = parent.dataset.embedKey;
+          if (key) collapsedEmbeds.current.delete(key);
+          parent.querySelector(':scope > [aria-expanded]')?.setAttribute('aria-expanded', 'true');
+        }
+      }
+      const top = root.scrollTop + target.getBoundingClientRect().top - root.getBoundingClientRect().top - 136;
+      root.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+      const body = article.querySelector<HTMLElement>('.article-body');
+      if (body) clearArrival = showReferenceArrival(target, body, post.sections);
+    });
+    return () => { window.cancelAnimationFrame(frame); clearArrival?.(); };
+  }, [navigation, post.id, scrollRoot]);
   useIsomorphicLayoutEffect(() => {
     const article = document.querySelector<HTMLElement>('.article-page');
     if (!article) return;

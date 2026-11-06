@@ -96,7 +96,7 @@ for (const language of ['', 'text', 'md', 'markdown', 'Markdown']) {
   const exampleHtml = example.sections.map((section) => section.html).join('');
   assert.equal(example.sections.length, 1);
   assert.equal(example.sections[0].heading, undefined);
-  assert.doesNotMatch(exampleHtml, /article-callout|article-math|article-embed|article-wikilink|<mark>|<input|<strong>|<h[1-6]/);
+  assert.doesNotMatch(exampleHtml, /article-callout|article-math|article-embed|article-content-ref|<mark>|<input|<strong>|<h[1-6]/);
   // Shiki's outer theme variables remain; source tokens have no rich styling.
   assert.doesNotMatch(exampleHtml, /<span[^>]*style=/);
   const { decodeHTML } = await import('entities');
@@ -165,9 +165,73 @@ assert.doesNotMatch(embedded, /<details class="article-embed/);
   assert.doesNotMatch(embedded, /<p><(?:figure|div|details)/);
 const articleLinks = await renderArticleMarkdown('[[folder/a]] and [[folder/b|the other note]] and ![[assets/文章 A/图 片.png]]', { resources });
 const articleLinkHtml = articleLinks.sections.map((section) => section.html).join('');
-assert.match(articleLinkHtml, /class="article-wikilink" href="\/posts\/a\/">文章甲/);
-assert.match(articleLinkHtml, /class="article-wikilink" href="\/posts\/b\/">the other note/);
-assert.doesNotMatch(articleLinkHtml, /article-wikilink[^>]*href="[^"]*图/);
+assert.match(articleLinkHtml, /class="article-content-ref" href="\/posts\/a\/">文章甲/);
+assert.match(articleLinkHtml, /class="article-content-ref" href="\/posts\/b\/">the other note/);
+assert.doesNotMatch(articleLinkHtml, /article-content-ref[^>]*href="[^"]*图/);
 assert.match(articleLinkHtml, /class="article-embed-image"/);
+
+  const referenceSource = [
+    '# 开始', '', '开场内容', '',
+    '## **引用章节**', '', '目标段落 **加粗** [参考][outside]。 ^intro', '',
+    '### 子标题', '', '下级内容', '',
+    '> [!blue]- 收起的提示', '> 提示内的目标段落。 ^inside', '',
+    '- [x] 一个任务 ^task', '- 另一个列表项', '',
+    '| 名称 | 值 |', '| --- | --- |', '| 表格内容 | 42 |', '', '^table', '',
+    '```markdown', '> [!red] 原样提示', '# 代码内标题', '代码内段落 ^code-marker', '```', '', '^code', '',
+    '> 引用的整个块', '', '^quote', '',
+    '## 结束', '', '不要出现在章节嵌入中', '', '### 100% 完成', '', '末尾百分比内容', '',
+    '## 别的父标题', '### 子标题', '', '同名标题的第二处', '',
+    '[outside]: https://example.com/reference',
+  ].join('\n');
+  const refResources = createMarkdownResources(publicDir, [
+    { key: 'reference', title: '引用示例', href: '/posts/reference/', markdown: referenceSource },
+    { key: 'loop', title: '循环', href: '/posts/loop/', markdown: '# 自嵌入\n\n![[loop#自嵌入]]' },
+    { key: 'duplicate', title: '重复块', href: '/posts/duplicate/', markdown: '甲 ^same\n\n乙 ^same' },
+  ]);
+  const renderRefs = (source, documentKey = 'reference') => renderArticleMarkdown(source, { resources: refResources, documentKey });
+  const toHtml = (article) => article.sections.map((section) => section.html).join('');
+  const referenced = await renderRefs(referenceSource);
+  const refHtml = toHtml(referenced);
+  assert.match(refHtml, /id="block-intro"/);
+  assert.match(refHtml, /id="block-inside"/);
+  assert.doesNotMatch(refHtml, /\^intro|\^inside|\^task|\^table|\^quote/);
+  assert.match(refHtml, /代码内段落 \^code-marker/);
+  assert.equal(refResources.resolveEmbed('reference#^code-marker').kind, 'missing');
+  assert.equal(refResources.resolveEmbed('duplicate#^same').kind, 'missing');
+  assert.equal(refResources.resolveEmbed('reference#不存在').kind, 'missing');
+  assert.equal(refResources.resolveEmbed('reference#100%25%20完成').kind, 'document');
+  assert.equal(refResources.resolveEmbed('reference#100%2525').kind, 'missing');
+  assert.doesNotMatch(toHtml(await renderRefs('甲 ^same\n\n乙 ^same')), /id="block-same"/);
+  assert.equal(refResources.resolveEmbed('#^intro', 'reference').kind, 'document');
+  const refLinks = toHtml(await renderRefs('[[reference#引用章节]]、[[#^intro|目标段落]]、[[reference#别的父标题#子标题]]、[[reference#不存在]]'));
+  assert.match(refLinks, /href="\/posts\/reference\/#article-%E5%BC%95%E7%94%A8%E7%AB%A0%E8%8A%82-1"/);
+  assert.match(refLinks, /引用示例 › 引用章节/);
+  assert.match(refLinks, /href="\/posts\/reference\/#block-intro">目标段落/);
+  assert.match(refLinks, /#article-%E5%AD%90%E6%A0%87%E9%A2%98-2/);
+  assert.match(refLinks, /article-content-ref-missing/);
+  const chapterHtml = toHtml(await renderRefs('![[reference#引用章节]]'));
+  assert.match(chapterHtml, /引用章节 · /);
+  assert.match(chapterHtml, /下级内容/);
+  assert.match(chapterHtml, /href="https:\/\/example.com\/reference"/);
+  assert.doesNotMatch(chapterHtml, /开场内容|不要出现在章节嵌入中|同名标题的第二处/);
+  const introHtml = toHtml(await renderRefs('![[reference#^intro]]'));
+  assert.match(introHtml, /引用片段 · /);
+  assert.match(introHtml, /目标段落 <strong>加粗<\/strong>/);
+  assert.doesNotMatch(introHtml, /下级内容|不要出现在章节嵌入中/);
+  assert.match(toHtml(await renderRefs('![[reference#^task]]')), /<li><input[^>]*checked/);
+  assert.match(toHtml(await renderRefs('![[reference#^table]]')), /<table>/);
+  assert.match(toHtml(await renderRefs('![[reference#^quote]]')), /<blockquote>/);
+  assert.match(toHtml(await renderRefs('![[reference#^code]]')), /<pre[^>]*data-language="Markdown"/);
+  const selfEmbed = toHtml(await renderRefs('![[#^intro]]'));
+  assert.match(selfEmbed, /目标段落/);
+  assert.doesNotMatch(selfEmbed, /已停止重复/);
+  const repeated = toHtml(await renderRefs('![[reference#引用章节]]\n\n![[reference#引用章节]]'));
+  const ids = [...repeated.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(ids.length, new Set(ids).size, '重复嵌入必须使用独立锚点');
+  const loop = toHtml(await renderRefs('![[loop#自嵌入]]'));
+  assert.match(loop, /已停止重复或过深的嵌入/);
+  const literalRefs = toHtml(await renderRefs('```markdown\n[[reference#引用章节]]\n![[reference#^intro]]\n段落 ^literal\n```'));
+  assert.doesNotMatch(literalRefs, /class="article-content-ref|class="article-embed-note|id="article-block/);
+  assert.match(literalRefs, /\^literal/);
 } finally { rmSync(publicDir, { recursive: true, force: true }); }
 console.log('Markdown verification passed: line breaks, GFM, callouts, highlighting, MathJax, Pele, references, and HTML safety.');
