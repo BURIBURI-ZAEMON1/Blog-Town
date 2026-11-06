@@ -20,7 +20,7 @@ export default function TownPostNotices({ posts, newPostIds, frame, reducedMotio
       {notices.map((notice) => <g key={notice.postId}>
         <path d={notice.path} />
         <circle className={`town-new-post-anchor town-new-post-anchor-${notice.kind}`} cx={notice.x} cy={notice.y} r="2" />
-        <circle className={`town-new-post-pulse town-new-post-pulse-${notice.kind}`} cx={notice.x} cy={notice.y} r="5" />
+        {frame.width >= 720 && <circle className={`town-new-post-pulse town-new-post-pulse-${notice.kind}`} cx={notice.x} cy={notice.y} r="5" />}
       </g>)}
     </svg>
     {notices.map((notice) => <button key={notice.postId} type="button" className={`town-new-post-label town-new-post-label-${notice.kind}`} data-post-id={notice.postId}

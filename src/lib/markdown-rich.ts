@@ -33,7 +33,10 @@ const languageLabels: Record<string, string> = {
 
 export async function renderCode(text: string, info = '') {
   const requested = info.trim().split(/\s+/)[0].toLowerCase();
-  const lang = Object.hasOwn(bundledLanguages, requested) ? requested as BundledLanguage : 'text';
+  // Markdown examples are literal source, without heading/link emphasis from
+  // the syntax grammar. Keep their label and all other language highlighting.
+  const literal = requested === 'md' || requested === 'markdown';
+  const lang = !literal && Object.hasOwn(bundledLanguages, requested) ? requested as BundledLanguage : 'text';
   const engine = await getHighlighter();
   if (lang !== 'text') await engine.loadLanguage(lang);
   const html = engine.codeToHtml(text, {

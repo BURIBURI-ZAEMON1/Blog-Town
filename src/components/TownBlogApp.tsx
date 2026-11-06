@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ElementType } from 'react';
 import type { SceneAnchor, TownPost } from './TownScene';
 import TownLoading from './TownLoading';
@@ -189,6 +189,18 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   }, []);
 
   useEffect(() => {
+    if (!isMobile || !searchOpen) return;
+    const dismissSearch = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('.topnav-center, .mobile-search-toggle')) return;
+      setSearchOpen(false);
+      inputRef.current?.blur();
+    };
+    document.addEventListener('pointerdown', dismissSearch);
+    return () => document.removeEventListener('pointerdown', dismissSearch);
+  }, [isMobile, searchOpen]);
+
+  useEffect(() => {
     if (!sidebarModal) return;
     const sidebar = sidebarRef.current;
     if (!sidebar) return;
@@ -223,10 +235,11 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         event.preventDefault();
         if (sidebarRef.current?.getAttribute('aria-modal') === 'true') return;
         setSearchOpen(true);
-        window.requestAnimationFrame(() => inputRef.current?.focus());
+        window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
       }
       if (event.key === 'Escape') {
         setSearchOpen(false);
+        inputRef.current?.blur();
         setHoveredPostId(undefined);
         setHoverAnchor(undefined);
         setMobileSidebarOpen(false);
@@ -452,8 +465,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           <button ref={menuButtonRef} className="mobile-sidebar-toggle" type="button" aria-label={mobileSidebarOpen ? '关闭侧边栏' : '打开侧边栏'} aria-expanded={mobileSidebarOpen} aria-controls="site-sidebar" onClick={openMobileSidebar}>{icon(mobileSidebarOpen ? 'close' : 'menu')}</button>
           <a className="top-wordmark" href="https://github.com/BURIBURI-ZAEMON1/Blog-Town" target="_blank" rel="noreferrer noopener" aria-label="Blog Town GitHub 仓库"><span>Blog</span> <strong>Town</strong>{icon('external')}</a>
           <nav className="desktop-top-links" aria-label="主导航"><button className={`topnav-link ${surface === 'town' ? 'is-active' : ''}`} onClick={() => navigate('town')}><span>小镇</span></button><button className={`topnav-link ${surface === 'archive' ? 'is-active' : ''}`} onClick={() => { setQuery(''); setActiveCategory(undefined); setActiveTag(undefined); navigate('archive'); }}><span>档案</span></button></nav>
-          <div className="topnav-center"><div className="top-search"><span>{icon('search')}</span><input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); setSearchIndex(0); }} onFocus={() => setSearchOpen(true)} onKeyDown={onSearchKeyDown} placeholder="寻找一篇笔记…" aria-label="搜索文章" /><kbd>⌘ K</kbd>{searchOpen && query && <SearchDropdown results={searchResults} activeIndex={searchIndex} onHover={onSidebarPostHover} onOpen={openArticle} onArchive={() => { setSearchOpen(false); navigate('archive'); }} />}</div></div>
-          <div className="topnav-actions"><button className="mobile-search-toggle" aria-label={searchOpen ? '关闭搜索' : '打开搜索'} aria-expanded={searchOpen} onClick={() => { if (searchOpen) { setSearchOpen(false); inputRef.current?.blur(); } else { setSearchOpen(true); window.requestAnimationFrame(() => inputRef.current?.focus()); } }}>{icon(searchOpen ? 'close' : 'search')}</button><button className="mode-button" onClick={() => setColorMode((mode) => mode === 'day' ? 'night' : 'day')} aria-label="切换昼夜模式">{colorMode === 'day' ? icon('moon') : icon('sun')}<span>{colorMode === 'day' ? '夜间' : '日间'}</span></button><label className="season-control" title={SEASON_PROFILES[season].description}>
+          <div className="topnav-center" id="topnav-search"><div className="top-search"><span>{icon('search')}</span><input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); setSearchIndex(0); }} onFocus={() => setSearchOpen(true)} onKeyDown={onSearchKeyDown} placeholder="寻找一篇笔记…" aria-label="搜索文章" /><kbd>⌘ K</kbd>{searchOpen && query && <SearchDropdown results={searchResults} activeIndex={searchIndex} onHover={onSidebarPostHover} onOpen={openArticle} onArchive={() => { setSearchOpen(false); navigate('archive'); }} />}</div></div>
+          <div className="topnav-actions"><button className="mobile-search-toggle" aria-controls="topnav-search" aria-label={searchOpen ? '关闭搜索' : '打开搜索'} aria-expanded={searchOpen} onClick={() => { if (searchOpen) { setSearchOpen(false); inputRef.current?.blur(); } else { setSearchOpen(true); window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })); } }}>{icon(searchOpen ? 'close' : 'search')}</button><button className="mode-button" onClick={() => setColorMode((mode) => mode === 'day' ? 'night' : 'day')} aria-label="切换昼夜模式">{colorMode === 'day' ? icon('moon') : icon('sun')}<span>{colorMode === 'day' ? '夜间' : '日间'}</span></button><label className="season-control" title={SEASON_PROFILES[season].description}>
             <span className="visually-hidden">小镇季节</span>{icon(SEASON_PROFILES[season].glyph)}
             <select aria-label="小镇季节" value={automaticSeason ? 'auto' : season} onChange={(event) => {
               const value=event.target.value;
@@ -512,6 +525,12 @@ function ArchiveView({ posts, onOpen }: { posts: TownPost[]; onOpen: (id: string
     {!posts.length && <div className="archive-empty"><h2>这里暂时没有文章</h2><p>再次点击当前选项即可取消筛选，或者选择上方的其他分类与标签。</p></div>}
   </section>;
 }
+
+// Native details/media state belongs to this DOM subtree. Unrelated reading,
+// hover, or theme updates must not write the authored HTML back into it.
+const ArticleSectionContent = memo(function ArticleSectionContent({ html }: { html: string }) {
+  return <div className="article-section-content" dangerouslySetInnerHTML={{ __html: html }} />;
+});
 
 type ArticleHeading = NonNullable<TownPost['sections'][number]['heading']>;
 
@@ -659,7 +678,7 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen }: { post: 
     const ancestorHidden = hiddenSections[index];
     const ownCollapsed = section.heading ? Boolean(collapsed[section.heading.id]) : false;
     const Heading = section.heading ? ARTICLE_HEADING_TAGS[Math.min(section.heading.level, 6)] : undefined;
-    return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id} {...(section.heading.html ? { dangerouslySetInnerHTML: { __html: section.heading.html } } : { children: section.heading.text })} /><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <div className="article-section-content" dangerouslySetInnerHTML={{ __html: section.html }} />}</section>;
+    return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id} {...(section.heading.html ? { dangerouslySetInnerHTML: { __html: section.heading.html } } : { children: section.heading.text })} /><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <ArticleSectionContent html={section.html} />}</section>;
   })}</div><div className="article-footer"><span>townId · {post.id}</span><span>／</span><span>{siteConfig.shortTitle} · map 01</span></div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <button onClick={() => onOpen(previousSeriesPost.id)}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></button> : <span />}{nextSeriesPost ? <button onClick={() => onOpen(nextSeriesPost.id)}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></button> : <span />}</div></div>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} map={townMap} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
 }
 

@@ -86,6 +86,42 @@ const references = await renderArticleMarkdown('> [!blue] [文档][ref]\n> 正�
 assert.equal((references.sections[0].html.match(/href="https:\/\/example.com\/reference"/g) ?? []).length, 2);
 const literal = await renderArticleMarkdown('\\$not math\\$\n\n```text\n> [!red] not a callout\n==not a highlight==\n```');
 assert.doesNotMatch(literal.sections[0].html, /article-callout|article-math|<mark>/);
+// Markdown examples must stay literal, including inside nested containers.
+const literalMarkdown = [
+  '# 原样标题', '> [!blue] 原样提示框', '==原样高亮== $x^2$',
+  '[[原样链接]]', '![[原样嵌入.md]]', '- [x] 原样任务', '<strong>原样 HTML</strong>',
+].join('\n');
+for (const language of ['', 'text', 'md', 'markdown', 'Markdown']) {
+  const example = await renderArticleMarkdown(`\`\`\`${language}\n${literalMarkdown}\n\`\`\``);
+  const exampleHtml = example.sections.map((section) => section.html).join('');
+  assert.equal(example.sections.length, 1);
+  assert.equal(example.sections[0].heading, undefined);
+  assert.doesNotMatch(exampleHtml, /article-callout|article-math|article-embed|article-wikilink|<mark>|<input|<strong>|<h[1-6]/);
+  // Shiki's outer theme variables remain; source tokens have no rich styling.
+  assert.doesNotMatch(exampleHtml, /<span[^>]*style=/);
+  const { decodeHTML } = await import('entities');
+  assert.equal(decodeHTML(exampleHtml.replace(/<[^>]*>/g, '')), literalMarkdown);
+}
+const nestedLiteral = await renderArticleMarkdown(`> [!blue] 外层提示框\n>\n> \`\`\`md\n> ${literalMarkdown.replaceAll('\n', '\n> ')}\n> \`\`\``);
+const nestedHtml = nestedLiteral.sections[0].html;
+assert.equal((nestedHtml.match(/class="article-callout/g) ?? []).length, 1);
+assert.doesNotMatch(nestedHtml, /<span[^>]*style=/);
+// Every source line retains both quote prefixes; a third > is literal code.
+const doubleCalloutCode = [
+  '> [!blue]+ 备注', '> 外层说明', '> > [!purple]- 详细语法',
+  '> > ```markdown', '> > > [!blue] 阅读提示', '> > > 支持 **粗体**、==高亮== 与 $x$。',
+  '> > > > [!purple]- 示例中的内层提示框', '> > > > 内层内容', '> > ```',
+].join('\n');
+const doubleCallout = await renderArticleMarkdown(doubleCalloutCode);
+const doubleHtml = doubleCallout.sections[0].html;
+assert.equal((doubleHtml.match(/class="article-callout/g) ?? []).length, 2);
+const doubleCode = doubleHtml.match(/<pre\b[^>]*>[\s\S]*?<\/pre>/)?.[0];
+assert.ok(doubleCode, '双层提示框中的代码必须渲染为多行代码块');
+const outsideCode = await renderArticleMarkdown('```markdown\n> [!blue] 阅读提示\n> 支持 **粗体**、==高亮== 与 $x$。\n> > [!purple]- 示例中的内层提示框\n> > 内层内容\n```');
+assert.equal(doubleCode, outsideCode.sections[0].html);
+const highlightedPython = await renderArticleMarkdown('```python\nprint("hello")\n```');
+assert.match(highlightedPython.sections[0].html, /data-language="Python"/);
+assert.match(highlightedPython.sections[0].html, /<span[^>]*style=/);
 const { createMarkdownResources } = await import('../src/lib/markdown-embeds.ts');
 const publicDir = mkdtempSync(join(tmpdir(), 'town-markdown-'));
 try {

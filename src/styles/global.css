@@ -481,10 +481,36 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 @media (max-width: 720px) {
   .mobile-search-toggle { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--sage); cursor: pointer; }
   .mobile-search-toggle .icon { width: 17px; height: 17px; }
-  .topnav.is-search-open { height: 108px; align-items: start; padding-top: 12px; }
-  .topnav.is-search-open .topnav-center { position: absolute; inset: 62px 16px auto; display: flex; z-index: 3; }
-  .topnav.is-search-open .top-search { min-height: 32px; padding: 0 8px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--paper-3) 94%, transparent); }
-  .topnav.is-search-open .search-dropdown { left: 0; right: 0; top: 38px; max-height: 270px; overflow-y: auto; }
+  /* The search panel is an overlay: opening it never changes the header row. */
+  .topnav.is-search-open .topnav-center {
+    position: absolute; inset: calc(100% + 8px) 16px auto auto;
+    grid-area: auto; display: block; width: min(360px, calc(100vw - 32px));
+    padding: 4px; border-radius: 16px; z-index: 40;
+    background: linear-gradient(135deg, rgba(255,255,255,.86), rgba(240,246,255,.68));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), inset 0 0 0 1px rgba(255,255,255,.5), 0 12px 32px rgba(24,46,76,.16);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+  }
+  .topnav.is-search-open .top-search { height: 44px; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; }
+  .topnav.is-search-open .top-search input { font-size: 16px; color: var(--ink); caret-color: var(--sage); }
+  .topnav.is-search-open .top-search input::placeholder { color: #52657e; }
+  .topnav.is-search-open .top-search kbd { display: none; }
+  .topnav.is-search-open .search-dropdown {
+    left: -4px; right: -4px; top: calc(100% + 12px); width: auto;
+    max-height: min(340px, calc(100dvh - 140px)); overflow-y: auto;
+    border: 0; border-radius: 16px;
+    background: linear-gradient(135deg, rgba(255,255,255,.94), rgba(240,246,255,.85));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 12px 32px rgba(24,46,76,.16);
+    -webkit-backdrop-filter: blur(22px) saturate(160%);
+    backdrop-filter: blur(22px) saturate(160%);
+    overscroll-behavior: contain;
+  }
+  .topnav.is-search-open .search-result { min-height: 48px; border-radius: 9px; }
+  .mode-night .topnav.is-search-open :is(.topnav-center, .search-dropdown) {
+    background: linear-gradient(135deg, rgba(27,43,65,.92), rgba(16,28,47,.8));
+    box-shadow: inset 0 1px 0 rgba(220,235,255,.2), inset 0 0 0 1px rgba(164,191,226,.13), 0 12px 32px rgba(0,0,0,.3);
+  }
+  .mode-night .topnav.is-search-open .top-search input::placeholder { color: #b3c2d7; }
   .mobile-town-hint { display: block; margin: 8px 16px 0; color: var(--muted); font-family: var(--mono); font-size: 8px; line-height: 1.65; letter-spacing: .02em; }
   .town-touch-preview { position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 12; display: block; padding: 14px 42px 14px 15px; border: 1px solid var(--line-strong); background: color-mix(in srgb, var(--paper-3) 96%, transparent); box-shadow: 0 10px 28px rgba(47, 48, 39, .18); }
   .town-touch-preview strong { display: block; margin-top: 7px; color: var(--ink); font-family: var(--serif); font-size: 15px; line-height: 1.4; }
