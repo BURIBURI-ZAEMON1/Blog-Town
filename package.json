@@ -16,6 +16,7 @@
     "verify:brick": "node scripts/verify-brick-town.mjs",
     "verify:seasons": "node scripts/verify-town-seasons.mjs",
     "verify:notices": "node scripts/verify-town-post-notices.mjs",
+    "verify:notice-motion": "node scripts/verify-town-notice-motion.mjs",
     "verify:layout": "node scripts/verify-town-layout-stability.mjs",
     "verify:markdown": "node scripts/verify-markdown.mjs"
   },
