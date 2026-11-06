@@ -1,4 +1,4 @@
-# Town Blog Framework
+# Blog Town Framework
 
 > 把博客变成一座会持续生长、会随季节变化的积木小镇。
 
