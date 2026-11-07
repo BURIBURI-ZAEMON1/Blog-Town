@@ -226,9 +226,6 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       const dx=e.clientX-down.lastX,dy=e.clientY-down.lastY;
       down.lastX=e.clientX;down.lastY=e.clientY;
       const totalX=e.clientX-down.x,totalY=e.clientY-down.y;
-      // Let the browser own vertical touch scrolling (touch-action: pan-y).
-      // Once a horizontal map drag starts, all movement belongs to that drag.
-      if(e.pointerType==='touch'&&!down.moved&&Math.abs(totalY)>Math.abs(totalX))return;
       if(down.moved||Math.hypot(totalX,totalY)>7){
         if(!down.moved){lastHover=undefined;callbacks().onHoverPost(undefined);}
         down.moved=true;

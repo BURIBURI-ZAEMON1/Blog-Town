@@ -24,8 +24,10 @@ export type PostNoticeAnchor = { postId: string; x: number; y: number; kind: Pos
 export type PostNoticeFrame = { width: number; height: number; anchors: PostNoticeAnchor[] };
 export type PostNoticePlacement = PostNoticeAnchor & { left: number; top: number; width: number; height: number; path: string };
 
+export type PostNoticeOffset = { x: number; y: number };
+
 /** CSS-pixel callouts fan out from article floors, including floors sharing a building. */
-export function layoutPostNotices({ width, height, anchors }: PostNoticeFrame): PostNoticePlacement[] {
+export function layoutPostNotices({ width, height, anchors }: PostNoticeFrame, offsets: ReadonlyMap<string, PostNoticeOffset> = new Map()): PostNoticePlacement[] {
   const margin = 10, gap = 8;
   const sizeFor = (kind: PostNoticeKind) => kind === 'guide'
     ? { width: width < 720 ? 168 : 184, height: width < 720 ? 56 : 52 }
@@ -36,14 +38,17 @@ export function layoutPostNotices({ width, height, anchors }: PostNoticeFrame): 
   const overlaps = (candidate: { left: number; top: number; width: number; height: number }) => placed.some((other) =>
     candidate.left < other.left + other.width + gap && candidate.left + candidate.width + gap > other.left &&
     candidate.top < other.top + other.height + gap && candidate.top + candidate.height + gap > other.top);
-  // The onboarding guide gets first choice of space; article notices fill around it.
-  for (const anchor of [...anchors].sort((a, b) => (a.kind === 'guide' ? -1 : 1) - (b.kind === 'guide' ? -1 : 1) || a.y - b.y || a.postId.localeCompare(b.postId))) {
+  // Reserve established lanes first. A viewport change never reflows existing labels.
+  const keyFor = (anchor: PostNoticeAnchor) => `${anchor.kind}:${anchor.postId}`;
+  for (const anchor of [...anchors].sort((a, b) => Number(offsets.has(keyFor(b))) - Number(offsets.has(keyFor(a))) || (a.kind === 'guide' ? -1 : 1) - (b.kind === 'guide' ? -1 : 1) || a.y - b.y || a.postId.localeCompare(b.postId))) {
     const size = sizeFor(anchor.kind);
     if (!Number.isFinite(anchor.x) || !Number.isFinite(anchor.y) || anchor.x < 0 || anchor.x > width || anchor.y < 0 || anchor.y > height) continue;
     // Keep the callout on one consistent side so panning does not make it
     // jump across the building and change the visual reading direction.
-    let position: { left: number; top: number } | undefined;
-    for (let offset = 0; offset < height && !position; offset += size.height + gap) {
+    const saved = offsets.get(keyFor(anchor));
+    let position = saved ? { left: anchor.x + saved.x, top: anchor.y + saved.y } : undefined;
+    // The search budget depends on label count, never the current viewport height.
+    for (let offset = 0; offset <= anchors.length * (size.height + gap) && !position; offset += size.height + gap) {
       for (const direction of offset ? [-1, 1] : [-1]) {
         const left = anchor.x + 28;
         const top = anchor.y - (anchor.kind === 'guide' ? 68 : 56) + direction * offset;

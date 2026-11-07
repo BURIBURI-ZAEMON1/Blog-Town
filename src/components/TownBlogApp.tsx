@@ -7,6 +7,7 @@ import { showReferenceArrival } from './article-reference-arrival';
 import { useTownNavigation, type MainSurface, type TownNavigation } from './useTownNavigation';
 import { useNewPostIds } from './useNewPostIds';
 import { useTownExploration } from './useTownExploration';
+import { useColorMode } from './useColorMode';
 import type { TownSceneProps } from '../scene/brick-town/types';
 import { friendLinks, siteConfig } from '../config/site';
 import type { TownLayout } from '../data/town-layout';
@@ -118,7 +119,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const [sidebarTag, setSidebarTag] = useState<string>();
   const [previewCategory, setPreviewCategory] = useState<string>();
   const [previewTag, setPreviewTag] = useState<string>();
-  const [colorMode, setColorMode] = useState<ColorMode>('day');
+  const { colorMode, toggleColorMode } = useColorMode();
   const [season, setSeason] = useState<Season>('summer');
   const [automaticSeason, setAutomaticSeason] = useState(true);
   const [calendarSeason, setCalendarSeason] = useState<Season>('summer');
@@ -427,7 +428,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           <a className="top-wordmark" href="https://github.com/BURIBURI-ZAEMON1/Blog-Town" target="_blank" rel="noreferrer noopener" aria-label="Blog Town GitHub 仓库"><span>Blog</span> <strong>Town</strong>{icon('external')}</a>
           <nav className="desktop-top-links" aria-label="主导航"><button className={`topnav-link ${surface === 'town' ? 'is-active' : ''}`} onClick={() => navigate('town')}><span>小镇</span></button><button className={`topnav-link ${surface === 'archive' ? 'is-active' : ''}`} onClick={() => { setQuery(''); setActiveCategory(undefined); setActiveTag(undefined); navigate('archive'); }}><span>档案</span></button></nav>
           <div className="topnav-center" id="topnav-search"><div className="top-search"><span>{icon('search')}</span><input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); setSearchIndex(0); }} onFocus={() => setSearchOpen(true)} onKeyDown={onSearchKeyDown} placeholder="寻找一篇笔记…" aria-label="搜索文章" /><kbd>⌘ K</kbd>{searchOpen && query && <SearchDropdown results={searchResults} activeIndex={searchIndex} onHover={onSidebarPostHover} onOpen={openArticle} onArchive={() => { setSearchOpen(false); navigate('archive'); }} />}</div></div>
-          <div className="topnav-actions"><button className="mobile-search-toggle" aria-controls="topnav-search" aria-label={searchOpen ? '关闭搜索' : '打开搜索'} aria-expanded={searchOpen} onClick={() => { if (searchOpen) { setSearchOpen(false); inputRef.current?.blur(); } else { setSearchOpen(true); window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })); } }}>{icon(searchOpen ? 'close' : 'search')}</button><button className="mode-button" onClick={() => setColorMode((mode) => mode === 'day' ? 'night' : 'day')} aria-label="切换昼夜模式">{colorMode === 'day' ? icon('moon') : icon('sun')}<span>{colorMode === 'day' ? '夜间' : '日间'}</span></button><label className="season-control" title={SEASON_PROFILES[season].description}>
+          <div className="topnav-actions"><button className="mobile-search-toggle" aria-controls="topnav-search" aria-label={searchOpen ? '关闭搜索' : '打开搜索'} aria-expanded={searchOpen} onClick={() => { if (searchOpen) { setSearchOpen(false); inputRef.current?.blur(); } else { setSearchOpen(true); window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })); } }}>{icon(searchOpen ? 'close' : 'search')}</button><button className="mode-button" onClick={toggleColorMode} aria-label="切换昼夜模式">{colorMode === 'day' ? icon('moon') : icon('sun')}<span>{colorMode === 'day' ? '夜间' : '日间'}</span></button><label className="season-control" title={SEASON_PROFILES[season].description}>
             <span className="visually-hidden">小镇季节</span>{icon(SEASON_PROFILES[season].glyph)}
             <select aria-label="小镇季节" value={automaticSeason ? 'auto' : season} onChange={(event) => {
               const value=event.target.value;
@@ -444,7 +445,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         <div className="main-scroll" ref={mainSurfaceRef}>
         {surface === 'town' && <section className="town-home">
           <TownStage posts={posts} layout={layout} newPostIds={newPostIds} guidePostId={guidePostId} onTownExplored={markExplored} season={season} activePostId={selectedPostId} hoveredPostId={touchPostId ?? hoveredPostId} query={query} category={highlightCategory} tag={highlightTag} categoryPreview={Boolean(previewCategory)} tagPreview={Boolean(previewTag)} colorMode={colorMode} reducedMotion={reducedMotion} onHoverPost={onHoverPost} onResolvePostAnchor={onResolvePostAnchor} onSelectPost={selectScenePost} hoveredPost={hoveredPost} hoverAnchor={hoverAnchor} touchPost={touchPost} onCloseTouchPreview={() => setTouchPostId(undefined)} />
-          <p className="mobile-town-hint">点击建筑预览，再次点击或选择「阅读文章」打开；横向拖动地图，纵向滑动页面。</p>
+          <p className="mobile-town-hint">点击建筑预览，再次点击或选择「阅读文章」打开；单指任意方向拖动小镇，双指捏合缩放。在小镇外滑动可浏览页面。</p>
           <div className="town-mobile-support">
             <div className="town-caption"><span><i className="caption-dot" /> {siteConfig.title} · {SEASON_PROFILES[season].label}季小镇</span><span>建筑即文章 / {layout.plots.length} buildings / {posts.length} article floors</span><span className="caption-spacer" /><button onClick={() => navigate('archive')}>打开完整档案 {icon('arrow')}</button></div>
             <RecentPosts posts={filteredPosts.slice(0, 5)} hasFilter={Boolean(query || activeCategory || activeTag)} onOpen={openArticle} onClear={clearFilters} />

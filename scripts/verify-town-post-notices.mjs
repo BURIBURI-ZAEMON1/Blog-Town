@@ -26,13 +26,33 @@ assert.deepEqual(getNewPostIds([{ id: 'offset', date: '2026-10-10T12:00:00+08:00
 assert.deepEqual([...parseReadPostIds('["read",null,1,"","read","second"]')], ['read', 'second']);
 for (const raw of [null, '{broken', '{}', 'true', 'null']) assert.equal(parseReadPostIds(raw).size, 0);
 
+// Panning another building out of view must not reassign this label's lane.
+const crowded = [{ postId: 'a', kind: 'new', x: 180, y: 240 }, { postId: 'b', kind: 'new', x: 180, y: 248 }];
+const initial = layoutPostNotices({ width: 390, height: 600, anchors: crowded });
+const offsets = new Map(initial.map((notice) => [`${notice.kind}:${notice.postId}`, { x: notice.left - notice.x, y: notice.top - notice.y }]));
+const before = initial.find((notice) => notice.postId === 'b');
+for (const height of [600, 400, 844]) {
+  const after = layoutPostNotices({ width: 390, height, anchors: [{ ...crowded[1], y: 20 }] }, offsets)[0];
+  assert.equal(after.top - after.y, before.top - before.y, 'notice jumped relative to its building after a peer left the viewport');
+  assert.equal(after.left - after.x, before.left - before.x, 'notice changed sides after panning');
+}
+
+for (const width of [320, 720, 1100]) {
+  assert.deepEqual(layoutPostNotices({ width, height: 400, anchors: [] }, offsets), []);
+  const reentered = layoutPostNotices({ width, height: 400, anchors: crowded }, offsets);
+  for (const notice of reentered) {
+    const saved = offsets.get(`${notice.kind}:${notice.postId}`);
+    assert.equal(notice.top - notice.y, saved.y, 'reentering or resizing changed a saved lane');
+  }
+}
+
 for (const [width, height] of [[320, 500], [390, 600], [1100, 760]]) {
   const anchors = Array.from({ length: 5 }, (_, i) => ({ postId: `floor-${i}`, kind: 'new', x: width / 2, y: height / 2 + i * 8 }));
   const placed = layoutPostNotices({ width, height, anchors });
   assert.equal(placed.length, anchors.length, 'series floors lost notices');
   for (let i = 0; i < placed.length; i++) {
     const a = placed[i];
-    assert(a.left >= 10 && a.left + a.width <= width - 10 && a.top >= 10 && a.top + a.height <= height - 10, 'label escaped the canvas');
+    assert.equal(a.left - a.x, 28, 'notice changed its fixed right-side offset');
     assert(a.path.startsWith(`M ${a.x} ${a.y} `), 'leader points to a different article floor');
     for (const b of placed.slice(i + 1)) assert(a.left + a.width <= b.left || b.left + b.width <= a.left || a.top + a.height <= b.top || b.top + b.height <= a.top, 'series labels overlap');
   }
@@ -74,4 +94,4 @@ assert.equal(projector.project([], undefined, 500, 375).anchors.length, 0, 'read
 camera.target.set(1000, 0, 1000); scene.render();
 assert.equal(projector.project(ids, undefined, 500, 375).anchors.length, 0, 'offscreen buildings retain floating labels');
 scene.dispose(); engine.dispose();
-console.log('PASS: rolling 14-day dates, unread IDs, corrupt storage, series label placement, camera projection/cache, resizing and offscreen culling');
+console.log('PASS: rolling 14-day dates, unread IDs, corrupt storage, stable notice lanes through pan/resize/reentry, series label placement, camera projection/cache, resizing and offscreen culling');

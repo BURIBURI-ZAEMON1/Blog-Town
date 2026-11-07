@@ -330,7 +330,7 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 
 
 /* Brick diorama is lit in linear space; CSS filters must not re-grade its PBR. */
-.brick-town-host canvas, .mode-night .brick-town-host canvas { filter: none; cursor: grab; touch-action: pan-y; }
+.brick-town-host canvas, .mode-night .brick-town-host canvas { filter: none; cursor: grab; touch-action: none; }
 .brick-town-host::after { display: none; }
 .brick-town-host { border: 0; background: #e3ddcd; }
 .brick-loading { position: absolute; inset: 0; display: grid; place-items: center; background: var(--paper); color: var(--muted); font-size: 13px; }

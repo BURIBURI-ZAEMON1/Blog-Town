@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { layoutPostNotices, type PostNoticeFrame } from '../data/town-post-notices';
+import { useLayoutEffect, useMemo } from 'react';
+import { layoutPostNotices, type PostNoticeFrame, type PostNoticeOffset } from '../data/town-post-notices';
 import type { TownPost } from '../scene/brick-town/types';
 
 type Props = {
@@ -13,7 +13,11 @@ type Props = {
 export default function TownPostNotices({ posts, newPostIds, frame, reducedMotion, onOpen }: Props) {
   const postMap = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);
   const newPostIdSet = useMemo(() => new Set(newPostIds ?? []), [newPostIds]);
-  const notices = useMemo(() => layoutPostNotices({ ...frame, anchors: frame.anchors.filter((anchor) => anchor.kind === 'guide' || newPostIdSet.has(anchor.postId)) }), [frame, newPostIdSet]);
+  const offsets = useMemo(() => new Map<string, PostNoticeOffset>(), [posts]);
+  const notices = useMemo(() => layoutPostNotices({ ...frame, anchors: frame.anchors.filter((anchor) => anchor.kind === 'guide' || newPostIdSet.has(anchor.postId)) }, offsets), [frame, newPostIdSet, offsets]);
+  useLayoutEffect(() => {
+    for (const notice of notices) offsets.set(`${notice.kind}:${notice.postId}`, { x: notice.left - notice.x, y: notice.top - notice.y });
+  }, [notices, offsets]);
   if (!notices.length) return null;
   return <div className="town-new-posts-overlay" data-reduced-motion={reducedMotion} role="group" aria-label="小镇新文章">
     <svg className="town-new-post-lines" width={frame.width} height={frame.height} viewBox={`0 0 ${frame.width} ${frame.height}`} aria-hidden="true">

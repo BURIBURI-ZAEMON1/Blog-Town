@@ -17,6 +17,7 @@
     "verify:seasons": "node scripts/verify-town-seasons.mjs",
     "verify:notices": "node scripts/verify-town-post-notices.mjs",
     "verify:notice-motion": "node scripts/verify-town-notice-motion.mjs",
+    "verify:mobile-ui": "node scripts/verify-town-mobile-ui.mjs",
     "verify:layout": "node scripts/verify-town-layout-stability.mjs",
     "verify:markdown": "node scripts/verify-markdown.mjs",
     "verify:giscus-ui": "node scripts/verify-giscus-ui.mjs"
