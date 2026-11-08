@@ -537,3 +537,39 @@ PLAYWRIGHT_CHANNEL=chrome npm run verify:giscus-ui -- --enabled
 ```
 
 两种检查均使用模拟评论服务，不会发布真实评论。若服务运行在其他地址，可添加 `TOWN_BLOG_TEST_URL=http://127.0.0.1:4325` 指定地址。
+
+
+## 15. 加载性能与运行时节能
+
+这些优化默认生效，无需额外开启，不改变小镇的建筑细节、渲染分辨率或阴影质量参数：
+
+- 直接进入小镇时，提前发现运行库、WebGL 着色器和环境贴图；原有字体在基础画面就绪后加载，避免与小镇冷启动争用带宽。直接进入文章或档案时立即加载字体，进入小镇前不下载 3D 运行库和环境贴图。
+- WebGL 着色器源码合并交付，保留原始算法；环境贴图使用无损 WebP 面片，保留原来的像素、分辨率、各级细节和光照参数。
+- 手机侧边栏关闭时不下载隐藏的署名图片与头像；打开后正常加载配置的原图。框架默认保留轻量 SVG 标识与头像，不包含作者个人博客的图片。
+- 相同种子下复用静态候选地块的计算结果，但不会缓存最终文章布局。发布、删除文章或调整系列后仍会重新生成对应建筑关系。
+- 小镇离开可视区域或页面切到后台时暂停绘制；切到文章或档案后释放场景和 GPU 资源。
+- 系统启用“减少动态效果”时，画面稳定后停止连续重绘。拖动、缩放、悬停高亮、换季、切换主题、视口变化和天气时段变化会唤醒绘制；关闭该系统偏好后恢复原有动画。
+
+判断线上加载表现时，请先执行 `npm run build`，再用 `npm run preview` 检查生产构建。开发服务器还包含即时内容处理、依赖预构建与热更新，耗时不能直接代表线上静态页面。真实体验也受网络、设备 GPU、浏览器缓存和文章规模影响，不能把本机测试时间视为所有设备的保证。
+
+### 性能回归检查
+
+```bash
+npm run verify                     # 包含地块缓存、实例矩阵、空间查询等回归
+npm run build                      # 以下冷启动检查使用 dist/，修改代码后先重建
+PLAYWRIGHT_CHANNEL=chrome npm run verify:assets
+PLAYWRIGHT_CHANNEL=chrome npm run verify:startup
+PLAYWRIGHT_CHANNEL=chrome npm run verify:desktop-startup
+```
+
+`verify:assets` 检查环境贴图解码并上传 GPU 后的像素是否与原始指纹一致。两项启动检查自行启动生产静态服务，检查冷启动预算、字体延后加载、环境贴图只下载一次和运行错误；浏览器/设备模拟仅用于回归，不等于真实手机的测试结果。没有本机 Chrome 时，可先安装 Playwright Chromium，再省略 `PLAYWRIGHT_CHANNEL=chrome`。
+
+有已发布文章时，可针对运行中的生产预览检查交互与资源释放（将地址替换为终端实际输出的地址）：
+
+```bash
+TOWN_BLOG_TEST_URL=http://127.0.0.1:4321 PLAYWRIGHT_CHANNEL=chrome npm run verify:runtime
+TOWN_BLOG_TEST_URL=http://127.0.0.1:4321 PLAYWRIGHT_CHANNEL=chrome npm run verify:mobile-ui
+TOWN_BLOG_TEST_URL=http://127.0.0.1:4321 PLAYWRIGHT_CHANNEL=chrome npm run verify:mobile-view
+```
+
+`verify:runtime` 需要至少一篇已发布文章，检查减少动态效果模式静止时零绘制、操作后恢复、后台暂停，以及往返小镇/档案后的堆内存与 DOM 是否持续增长。`verify:mobile-view` 还需要至少两篇同系列的已发布文章，用于验证手机视口稳定与系列目录吸顶。框架默认文章目录为空，测试用文章应由你自行准备，不需要为此保留示例文章。

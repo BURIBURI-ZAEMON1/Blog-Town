@@ -4,18 +4,10 @@ import { townBoard, townTravelRoutes, roadCenterlines, roadWidths, riverCenterli
 import { samplePath, pointInPolygon, findPathIntersection } from '../../data/town-spatial';
 import { makeThiefArrivalRoute } from '../../data/town-life';
 import { SnowSurfaces } from './surfaces';
+import { createPathProximity } from './path-proximity';
 import { BrickKit, ThinBrickKit, STUD as S, COLORS as C, COURSE as H } from './kit';
 
 export const BOARD = townBoard;
-const distanceTo = (p: Point, samples: Point[]) => {
-  let best = Infinity;
-  for (let i = 1; i < samples.length; i++) {
-    const a = samples[i-1], b = samples[i], dx = b.x-a.x, dz = b.z-a.z;
-    const t = Math.max(0, Math.min(1, ((p.x-a.x)*dx+(p.z-a.z)*dz)/(dx*dx+dz*dz || 1)));
-    best = Math.min(best, Math.hypot(p.x-a.x-t*dx, p.z-a.z-t*dz));
-  }
-  return best;
-};
 export function randomFor(seed: string) {
   let state = [...seed].reduce((sum, c) => (sum * 33 + c.charCodeAt(0)) >>> 0, 5381);
   return () => { state = (1664525 * state + 1013904223) >>> 0; return state / 4294967296; };
@@ -28,15 +20,15 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const snowSurfaces = new SnowSurfaces();
   const groundTiles: Point[] = [], waterTiles: Point[] = [], trees: { x: number; z: number; size: number }[] = [];
   const terrainStuds = mobile ? 3 : 2;
-  const roads = Object.entries(roadCenterlines).map(([key, path]) => ({ samples: samplePath(path, 12), width: roadWidths[key as keyof typeof roadWidths] }));
-  const river = samplePath(riverCenterline, 12);
+  const roads = Object.entries(roadCenterlines).map(([key, path]) => ({ near: createPathProximity(samplePath(path, 12)), width: roadWidths[key as keyof typeof roadWidths] }));
+  const nearRiver = createPathProximity(samplePath(riverCenterline, 12));
   const reserved = layout.reservedPlots ?? layout.plots;
-  const access = layout.plots.map(plot=>makeThiefArrivalRoute(plot,townTravelRoutes,samplePath,layout.plots));
-  const isRoad = (p: Point, clearance = 0) => access.some(path=>distanceTo(p,path)<0.30+clearance)||roads.some(r => distanceTo(p, r.samples) < r.width / 2 + clearance) || Math.hypot(p.x,p.z) < townCenterRoundaboutRadius + clearance;
+  const access = layout.plots.map(plot=>createPathProximity(makeThiefArrivalRoute(plot,townTravelRoutes,samplePath,layout.plots)));
+  const isRoad = (p: Point, clearance = 0) => access.some(near=>near(p,0.30+clearance))||roads.some(r => r.near(p,r.width / 2 + clearance)) || Math.hypot(p.x,p.z) < townCenterRoundaboutRadius + clearance;
   const inHouse = (p: Point, clearance = 0) => reserved.some(b => Math.abs(p.x-b.x) < b.width/2+clearance && Math.abs(p.z-b.z) < b.depth/2+clearance);
   const inBuiltHouse = (p:Point,clearance=0)=>layout.plots.some(b=>Math.abs(p.x-b.x)<b.width/2+clearance&&Math.abs(p.z-b.z)<b.depth/2+clearance);
   const inEntity = (p:Point,clearance=0)=>layout.entities.some(e=>Math.abs(p.x-e.x)<e.width/2+clearance&&Math.abs(p.z-e.z)<e.depth/2+clearance);
-  const isWater = (p: Point, clearance = 0) => distanceTo(p, river) < riverWidth/2+clearance;
+  const isWater = (p: Point, clearance = 0) => nearRiver(p,riverWidth/2+clearance);
   const width = BOARD.maxX - BOARD.minX, depth = BOARD.maxZ - BOARD.minZ;
   const centerX = (BOARD.maxX+BOARD.minX)/2;
   // The diorama has actual thickness and two moulded layers, not a vast flat plane.

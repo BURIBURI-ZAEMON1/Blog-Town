@@ -10,7 +10,7 @@
     "preview": "astro preview",
     "check": "astro check",
     "verify:spatial": "node scripts/verify-town-spatial.mjs",
-    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:spatial && npm run verify:life && npm run verify:brick && npm run verify:seasons && npm run verify:notices && npm run verify:layout && npm run verify:markdown",
+    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:spatial && npm run verify:proximity && npm run verify:instances && npm run verify:life && npm run verify:brick && npm run verify:seasons && npm run verify:notices && npm run verify:layout && npm run verify:layout-cache && npm run verify:markdown",
     "verify:content": "node scripts/verify-content.mjs",
     "verify:life": "node scripts/verify-town-life.mjs",
     "verify:brick": "node scripts/verify-brick-town.mjs",
@@ -20,7 +20,15 @@
     "verify:mobile-ui": "node scripts/verify-town-mobile-ui.mjs",
     "verify:layout": "node scripts/verify-town-layout-stability.mjs",
     "verify:markdown": "node scripts/verify-markdown.mjs",
-    "verify:giscus-ui": "node scripts/verify-giscus-ui.mjs"
+    "verify:giscus-ui": "node scripts/verify-giscus-ui.mjs",
+    "verify:mobile-view": "node scripts/verify-mobile-view-stability.mjs",
+    "verify:startup": "node scripts/verify-town-startup.mjs",
+    "verify:proximity": "node scripts/verify-town-proximity.mjs",
+    "verify:instances": "node scripts/verify-town-instances.mjs",
+    "verify:desktop-startup": "node scripts/verify-town-startup.mjs --desktop",
+    "verify:layout-cache": "node scripts/verify-town-layout-cache.mjs",
+    "verify:assets": "node scripts/verify-town-assets.mjs",
+    "verify:runtime": "node scripts/verify-town-runtime.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.4",

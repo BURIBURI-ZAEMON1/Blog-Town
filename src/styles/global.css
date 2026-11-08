@@ -1567,7 +1567,7 @@ body { font-family: var(--sans); }
   .topnav { grid-template-columns: auto 1fr auto; gap: 10px; padding-inline: 16px; }
   .topnav-center { width: auto; }
   .topnav-link { display: none; }
-  .series-drawer { position: relative; margin-top: 18px; }
+  .series-drawer { margin-top: 18px; }
   .series-drawer-toggle { min-height: 48px; padding-inline: 12px; }
   .series-drawer-list button { padding-inline: 12px; }
   .series-neighbor-grid { gap: 8px; }

@@ -2,6 +2,8 @@ import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRe
 import type { ElementType } from 'react';
 import type { SceneAnchor, TownPost } from './TownScene';
 import TownLoading from './TownLoading';
+import SidebarImage from './SidebarImage';
+import { requestTownFonts } from '../lib/town-fonts';
 import { commentConfig } from '../config/comments';
 import { showReferenceArrival } from './article-reference-arrival';
 import { useTownNavigation, type MainSurface, type TownNavigation } from './useTownNavigation';
@@ -48,8 +50,8 @@ function TownStage({ hoveredPost, hoverAnchor, touchPost, onCloseTouchPreview, .
       <TownScene
         {...sceneProps}
         onLoadingStart={() => setSettled(false)}
-        onFirstFrame={() => setSettled(true)}
-        onInitializationError={() => setSettled(true)}
+        onFirstFrame={() => { setSettled(true); void requestTownFonts(); }}
+        onInitializationError={() => { setSettled(true); void requestTownFonts(); }}
       />
     </Suspense>
     {!settled && <TownLoading reducedMotion={sceneProps.reducedMotion} />}
@@ -146,6 +148,9 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const mainSurfaceRef = useRef<HTMLDivElement>(null);
   const { navigation, navigate: navigateTo } = useTownNavigation(posts, mainSurfaceRef, initialSurface, initialPost?.id);
   const { surface, postId: selectedPostId } = navigation;
+  useEffect(() => {
+    if (surface !== 'town') void requestTownFonts();
+  }, [surface]);
 
   const postMap = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);
   const sortedPosts = useMemo(() => [...posts].sort((a, b) => +new Date(b.date) - +new Date(a.date)), [posts]);
@@ -389,7 +394,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
       <aside id="site-sidebar" ref={sidebarRef} role={sidebarModal ? 'dialog' : undefined} aria-modal={sidebarModal ? true : undefined} inert={isMobile && !mobileSidebarOpen} className={`sidebar ${mobileSidebarOpen ? 'is-mobile-open' : ''}`} aria-label={`${siteConfig.title} 侧边栏`}>
         <div className="sidebar-scroll">
           <div className="sidebar-fixed-head">
-            <div className="brand-block"><div className="brand-mark brand-image"><img src={siteConfig.logo} alt="" /></div><div><div className="brand-name">{siteConfig.title}</div><div className="brand-subtitle">{siteConfig.tagline}</div></div><button className="mobile-sidebar-close" type="button" aria-label="关闭侧边栏" onClick={() => setMobileSidebarOpen(false)}>{icon('close')}</button></div>
+            <div className="brand-block"><div className="brand-mark brand-image"><SidebarImage src={siteConfig.logo} alt="" mobileOpen={mobileSidebarOpen} /></div><div><div className="brand-name">{siteConfig.title}</div><div className="brand-subtitle">{siteConfig.tagline}</div></div><button className="mobile-sidebar-close" type="button" aria-label="关闭侧边栏" onClick={() => setMobileSidebarOpen(false)}>{icon('close')}</button></div>
             <div className="sidebar-rule" />
             <nav className="desktop-sidebar-nav" aria-label="侧边栏入口">
               <button className={`nav-item ${sidebarPanel === 'profile' ? 'is-active' : ''}`} onClick={() => { setSidebarPanel('profile'); setActiveCategory(undefined); setActiveTag(undefined); setSidebarCategory(undefined); setSidebarTag(undefined); }}>{icon('home')}<span>名片</span></button>
@@ -413,7 +418,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
             </div>
           </div>
           <div className={`sidebar-content-scroll ${sidebarPanel === 'profile' ? 'is-profile' : ''}`}>
-            <SidebarContent panel={sidebarPanel} posts={sidebarPosts} categories={categories} tags={tags} activeCategory={sidebarCategory} activeTag={sidebarTag} hoveredPostId={hoveredPostId} onHover={onSidebarPostHover} onCategoryPreview={onCategoryPreview} onTagPreview={onTagPreview} onCategory={chooseCategory} onTag={chooseTag} onOpenArticle={openArticle} onBack={() => { setPreviewCategory(undefined); setPreviewTag(undefined); setSidebarPanel(sidebarCategory ? 'categories' : sidebarTag ? 'tags' : 'profile'); setSidebarCategory(undefined); setSidebarTag(undefined); setActiveCategory(undefined); setActiveTag(undefined); }} />
+            <SidebarContent mobileOpen={mobileSidebarOpen} panel={sidebarPanel} posts={sidebarPosts} categories={categories} tags={tags} activeCategory={sidebarCategory} activeTag={sidebarTag} hoveredPostId={hoveredPostId} onHover={onSidebarPostHover} onCategoryPreview={onCategoryPreview} onTagPreview={onTagPreview} onCategory={chooseCategory} onTag={chooseTag} onOpenArticle={openArticle} onBack={() => { setPreviewCategory(undefined); setPreviewTag(undefined); setSidebarPanel(sidebarCategory ? 'categories' : sidebarTag ? 'tags' : 'profile'); setSidebarCategory(undefined); setSidebarTag(undefined); setActiveCategory(undefined); setActiveTag(undefined); }} />
           </div>
         </div>
         <div className="sidebar-footer">
@@ -460,12 +465,12 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   );
 }
 
-function SidebarContent({ panel, posts, categories, tags, activeCategory, activeTag, hoveredPostId, onHover, onCategoryPreview, onTagPreview, onCategory, onTag, onOpenArticle, onBack }: { panel: SidebarPanel; posts: TownPost[]; categories: string[]; tags: string[]; activeCategory?: string; activeTag?: string; hoveredPostId?: string; onHover: (id?: string) => void; onCategoryPreview: (value?: string) => void; onTagPreview: (value?: string) => void; onCategory: (value?: string) => void; onTag: (value?: string) => void; onOpenArticle: (id: string) => void; onBack: () => void }) {
+function SidebarContent({ mobileOpen, panel, posts, categories, tags, activeCategory, activeTag, hoveredPostId, onHover, onCategoryPreview, onTagPreview, onCategory, onTag, onOpenArticle, onBack }: { mobileOpen: boolean; panel: SidebarPanel; posts: TownPost[]; categories: string[]; tags: string[]; activeCategory?: string; activeTag?: string; hoveredPostId?: string; onHover: (id?: string) => void; onCategoryPreview: (value?: string) => void; onTagPreview: (value?: string) => void; onCategory: (value?: string) => void; onTag: (value?: string) => void; onOpenArticle: (id: string) => void; onBack: () => void }) {
   if (panel === 'categories' || panel === 'category-posts') return <div className="sidebar-panel"><SidebarPanelHeader title={panel === 'category-posts' ? activeCategory ?? '分类文章' : '分类'} eyebrow="CATEGORIES" onBack={panel === 'category-posts' ? onBack : undefined} />{panel === 'categories' ? <div className="sidebar-taxonomy">{categories.map((category) => <button key={category} className={activeCategory === category ? 'is-selected' : ''} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onCategoryPreview(category); }} onPointerLeave={(event) => { if (event.pointerType === 'mouse') onCategoryPreview(undefined); }} onClick={() => onCategory(category)}><span>{category}</span><b>{posts.filter((post) => post.category === category).length}</b></button>)}</div> : <SidebarPostList posts={posts} hoveredPostId={hoveredPostId} onHover={onHover} onOpenArticle={onOpenArticle} />}</div>;
   if (panel === 'tags' || panel === 'tag-posts') return <div className="sidebar-panel"><SidebarPanelHeader title={panel === 'tag-posts' ? `#${activeTag ?? '标签'}` : '标签'} eyebrow="TAGS" onBack={panel === 'tag-posts' ? onBack : undefined} />{panel === 'tags' ? <div className="sidebar-tags">{tags.map((tag) => <button key={tag} className={activeTag === tag ? 'is-selected' : ''} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onTagPreview(tag); }} onPointerLeave={(event) => { if (event.pointerType === 'mouse') onTagPreview(undefined); }} onClick={() => onTag(tag)}>#{tag}</button>)}</div> : <SidebarPostList posts={posts} hoveredPostId={hoveredPostId} onHover={onHover} onOpenArticle={onOpenArticle} />}</div>;
   if (panel === 'friends') return <div className="sidebar-panel"><SidebarPanelHeader title="友邻" eyebrow="FRIEND LINKS" />{friendLinks.length ? <div className="friends-list">{friendLinks.map((friend) => <a className="friend-row" href={friend.url} target="_blank" rel="noreferrer noopener" key={friend.id}><span className="friend-avatar"><img src={friend.avatar} alt="" loading="lazy" /></span><span><strong>{friend.nickname}</strong>{friend.description && <small>{friend.description}</small>}</span>{icon('external')}</a>)}</div> : <div className="sidebar-empty">还没有友邻，等一封新信。</div>}</div>;
   if (panel === 'list') return <div className="sidebar-panel list-panel"><SidebarPanelHeader title="文章列表" eyebrow="ALL NOTES" /><SidebarPostList posts={posts} hoveredPostId={hoveredPostId} onHover={onHover} onOpenArticle={onOpenArticle} /></div>;
-  return <div className="profile-panel"><img className="profile-avatar" src={siteConfig.profile.avatar} alt={siteConfig.profile.name} /><span className="panel-eyebrow">ABOUT ME</span><h2>{siteConfig.profile.name}</h2><strong className="profile-headline">{siteConfig.profile.headline}</strong><p>{siteConfig.profile.bio}</p>{siteConfig.profile.links.length > 0 && <div className="profile-links">{siteConfig.profile.links.map((link) => <a key={link.id} href={link.url} aria-label={link.label} title={link.label} target={link.url.startsWith('http') ? '_blank' : undefined} rel={link.url.startsWith('http') ? 'noreferrer noopener' : undefined}><img className="profile-link-logo" src={link.logo} alt="" loading="lazy" /><span className="visually-hidden">{link.label}</span></a>)}</div>}</div>;
+  return <div className="profile-panel"><SidebarImage className="profile-avatar" src={siteConfig.profile.avatar} alt={siteConfig.profile.name} mobileOpen={mobileOpen} /><span className="panel-eyebrow">ABOUT ME</span><h2>{siteConfig.profile.name}</h2><strong className="profile-headline">{siteConfig.profile.headline}</strong><p>{siteConfig.profile.bio}</p>{siteConfig.profile.links.length > 0 && <div className="profile-links">{siteConfig.profile.links.map((link) => <a key={link.id} href={link.url} aria-label={link.label} title={link.label} target={link.url.startsWith('http') ? '_blank' : undefined} rel={link.url.startsWith('http') ? 'noreferrer noopener' : undefined}><img className="profile-link-logo" src={link.logo} alt="" loading="lazy" /><span className="visually-hidden">{link.label}</span></a>)}</div>}</div>;
 }
 
 function SidebarPanelHeader({ title, eyebrow, onBack }: { title: string; eyebrow: string; onBack?: () => void }) { return <div className="sidebar-panel-header">{onBack && <button onClick={onBack} aria-label="返回面板">{icon('back')}</button>}<div><span>{eyebrow}</span><strong>{title}</strong></div></div>; }

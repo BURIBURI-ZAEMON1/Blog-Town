@@ -1,5 +1,4 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color.js';
-import { Matrix } from '@babylonjs/core/Maths/math.vector.js';
 import { Mesh } from '@babylonjs/core/Meshes/mesh.js';
 import '@babylonjs/core/Meshes/thinInstanceMesh.js';
 import { CreateCylinderVertexData } from '@babylonjs/core/Meshes/Builders/cylinderBuilder.pure.js';
@@ -145,8 +144,10 @@ export class ThinBrickKit {
     const bucketKey = `${key}:${color}:${glass}`;
     let bucket = this.buckets.get(bucketKey);
     if (!bucket) { bucket = { geometry, color, glass, matrices: [] }; this.buckets.set(bucketKey, bucket); }
-    const matrix = Matrix.RotationY(yaw); matrix.setTranslationFromFloats(x, y, z);
-    bucket.matrices.push(...matrix.asArray());
+    // These instances only rotate around Y and translate. Write the same column-
+    // major matrix directly instead of allocating a Babylon Matrix per stud.
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    bucket.matrices.push(c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, x, y, z, 1);
   }
   box(x: number, y: number, z: number, w: number, h: number, d: number, color: string, yaw = 0, glass = false) {
     this.add(`simple:${w}:${h}:${d}`, simpleBox(w, h, d), x, y, z, color, yaw, glass);
@@ -166,7 +167,7 @@ export class ThinBrickKit {
       const data = new VertexData(); data.positions = bucket.geometry.positions; data.normals = bucket.geometry.normals; data.indices = bucket.geometry.indices; data.applyToMesh(mesh);
       mesh.material = materialFor(this.scene, bucket.color, bucket.glass, this.materialGroup);
       mesh.thinInstanceSetBuffer('matrix', new Float32Array(bucket.matrices), 16, true);
-      mesh.thinInstanceRefreshBoundingInfo(true);
+      // thinInstanceSetBuffer already refreshes the full bounds.
       mesh.receiveShadows = true; mesh.isPickable = false; mesh.alwaysSelectAsActiveMesh = true;
       mesh.metadata = { plastic: true, glass: bucket.glass, baseColor: bucket.color, thinInstances: bucket.matrices.length / 16 };
       this.meshes.push(mesh);

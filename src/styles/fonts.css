@@ -1,0 +1,9 @@
+/* Loaded after the town's first frame so fonts cannot block the 3D runtime. */
+@import '@fontsource-variable/space-grotesk/wght.css';
+@import '@fontsource-variable/bodoni-moda/wght.css';
+@import '@fontsource-variable/bodoni-moda/wght-italic.css';
+@import '@fontsource-variable/ibm-plex-sans/wght.css';
+@import '@ibm/plex-sans-sc/fonts/split/woff2/hinted/IBMPlexSansSC-Regular.css';
+@import '@ibm/plex-sans-sc/fonts/split/woff2/hinted/IBMPlexSansSC-Bold.css';
+@import '@fontsource/zcool-qingke-huangyou/chinese-simplified-400.css';
+@import '@fontsource/space-mono/latin-400.css';

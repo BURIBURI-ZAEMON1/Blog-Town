@@ -394,21 +394,12 @@ const visibleSlots: Point[] = [
   { x: 3.8, z: 5.0 }, { x: 5.4, z: 5.0 }, { x: 7.0, z: 5.0 },
 ];
 
-export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[] = []): TownLayout => {
-  const groups = groupPosts(posts);
-  const presets = stableArticlePlots[seed] ?? {};
-  const orderedGroups = [...groups].sort((a, b) => {
-    const aPreset = presets[groupKey(a)];
-    const bPreset = presets[groupKey(b)];
-    if (aPreset && bPreset) return aPreset.order - bPreset.order;
-    if (aPreset) return -1;
-    if (bPreset) return 1;
-    return stableGroupOrder(a) - stableGroupOrder(b) || hashSeed(`${seed}:article-group:${groupKey(a)}`) - hashSeed(`${seed}:article-group:${groupKey(b)}`);
-  });
-  const occupied: TownPlot[] = [];
-  const plots: TownPlot[] = [];
-  const roofs: TownPlot['roof'][] = ['gable', 'hip', 'flat'];
-  const walls: TownPlot['walls'][] = ['stone', 'plaster', 'timber'];
+// Candidate geometry and per-ring capacity depend only on the town seed, not
+// article content. Keep one prepared seed (bounded cache); never cache returned
+// layouts, so content edits still rebuild article groups and reservations.
+let preparedLots: ReturnType<typeof prepareLots> | undefined;
+let preparedSeed: string | undefined;
+function prepareLots(seed: string) {
   const plotWidth = 2.16;
   const plotDepth = 1.80;
   const gridStep = 0.36;
@@ -425,23 +416,50 @@ export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[
   const slotRandom = rngFor(`${seed}:plot-order`);
   const ringWidth = 7.5;
   const candidates = [...uniqueSlots.values()]
-    .map((slot, slotIndex) => ({ slot, slotIndex, distance: Math.hypot(slot.x, slot.z), ring: Math.floor(Math.hypot(slot.x, slot.z) / ringWidth), jitter: slotRandom() }))
+    .map((slot, slotIndex) => ({ slot, slotIndex, distance: Math.hypot(slot.x, slot.z), ring: Math.floor(Math.hypot(slot.x, slot.z) / ringWidth), jitter: slotRandom(), buildable: isBuildablePlot({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, []) }))
     .sort((a, b) => a.ring - b.ring || a.distance + a.jitter * 1.8 - (b.distance + b.jitter * 1.8) || a.slotIndex - b.slotIndex);
 
   // Estimate how many safely spaced plots each ring can hold. This is only a
   // layout metric; it does not create buildings or touch the rendered world.
   const ringCapacity = new Map<number, number>();
   const ringCandidates = new Map<number, typeof candidates>();
-  candidates.forEach((candidate) => ringCandidates.set(candidate.ring, [...(ringCandidates.get(candidate.ring) ?? []), candidate]));
+  for (const candidate of candidates) {
+    let ringSlots = ringCandidates.get(candidate.ring);
+    if (!ringSlots) { ringSlots = []; ringCandidates.set(candidate.ring, ringSlots); }
+    ringSlots.push(candidate);
+  }
   ringCandidates.forEach((ringSlots, ring) => {
     const ringOccupied: Array<{ x: number; z: number; width: number; depth: number }> = [];
     for (const candidate of ringSlots) {
       const footprint = { x: candidate.slot.x, z: candidate.slot.z, width: plotWidth, depth: plotDepth };
-      if (!isBuildablePlot(footprint, ringOccupied)) continue;
+      if (!candidate.buildable || ringOccupied.some(other => overlaps(footprint, other))) continue;
       ringOccupied.push(footprint);
     }
     ringCapacity.set(ring, ringOccupied.length);
   });
+
+  return { candidates, ringCapacity, plotWidth, plotDepth };
+}
+
+export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[] = []): TownLayout => {
+  const groups = groupPosts(posts);
+  const presets = stableArticlePlots[seed] ?? {};
+  const orderedGroups = [...groups].sort((a, b) => {
+    const aPreset = presets[groupKey(a)];
+    const bPreset = presets[groupKey(b)];
+    if (aPreset && bPreset) return aPreset.order - bPreset.order;
+    if (aPreset) return -1;
+    if (bPreset) return 1;
+    return stableGroupOrder(a) - stableGroupOrder(b) || hashSeed(`${seed}:article-group:${groupKey(a)}`) - hashSeed(`${seed}:article-group:${groupKey(b)}`);
+  });
+  const occupied: TownPlot[] = [];
+  const plots: TownPlot[] = [];
+  const roofs: TownPlot['roof'][] = ['gable', 'hip', 'flat'];
+  const walls: TownPlot['walls'][] = ['stone', 'plaster', 'timber'];
+  if (!preparedLots || preparedSeed !== seed) {
+    preparedLots = prepareLots(seed); preparedSeed = seed;
+  }
+  const { candidates, ringCapacity, plotWidth, plotDepth } = preparedLots;
 
   let unlockedRing = 0;
   const ringOccupied = new Map<number, number>();
@@ -452,10 +470,10 @@ export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[
     const presetCandidate = preset ? candidates.find(({ slot }) => Math.abs(slot.x - preset.x) < 0.001 && Math.abs(slot.z - preset.z) < 0.001) : undefined;
     let candidate = presetCandidate;
     if (!candidate) {
-      candidate = candidates.find(({ slot, ring }) => ring <= unlockedRing && isBuildablePlot({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, occupied));
+      candidate = candidates.find(({ slot, ring, buildable }) => ring <= unlockedRing && buildable && !occupied.some(other => overlaps({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, other)));
       while (!candidate && unlockedRing < Math.max(...ringCapacity.keys())) {
         unlockedRing += 1;
-        candidate = candidates.find(({ slot, ring }) => ring <= unlockedRing && isBuildablePlot({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, occupied));
+        candidate = candidates.find(({ slot, ring, buildable }) => ring <= unlockedRing && buildable && !occupied.some(other => overlaps({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, other)));
       }
     }
     const slot = candidate?.slot;
@@ -482,12 +500,12 @@ export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[
   // Reserve empty lots using the exact same collision contract as article lots.
   // Empty lots are visible as clear space only; they never become buildings.
   const reservedPlots = [...plots];
-  for (const { slot } of candidates) {
+  for (const { slot, buildable } of candidates) {
     // Keep a generous logical buffer ahead of the current article count. The
     // full candidate field is still available to future layouts, while this
     // buffer protects the currently rendered world from decorative overlap.
     if (reservedPlots.length >= Math.max(96, groups.length + 48)) break;
-    if (!isBuildablePlot({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, reservedPlots)) continue;
+    if (!buildable || reservedPlots.some(other => overlaps({ x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth }, other))) continue;
     reservedPlots.push({
       id: `reserved-building-lot-${reservedPlots.length + 1}`,
       x: slot.x, z: slot.z, width: plotWidth, depth: plotDepth,

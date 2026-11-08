@@ -3,14 +3,6 @@ import TownBlogApp from '../components/TownBlogApp';
 import { siteConfig } from '../config/site';
 import type { TownLayout } from '../data/town-layout';
 import type { TownPost } from '../components/TownScene';
-import '@fontsource-variable/space-grotesk/wght.css';
-import '@fontsource-variable/bodoni-moda/wght.css';
-import '@fontsource-variable/bodoni-moda/wght-italic.css';
-import '@fontsource-variable/ibm-plex-sans/wght.css';
-import '@ibm/plex-sans-sc/fonts/split/woff2/hinted/IBMPlexSansSC-Regular.css';
-import '@ibm/plex-sans-sc/fonts/split/woff2/hinted/IBMPlexSansSC-Bold.css';
-import '@fontsource/zcool-qingke-huangyou/chinese-simplified-400.css';
-import '@fontsource/space-mono/latin-400.css';
 import '../styles/global.css';
 import '../styles/markdown.css';
 
@@ -30,7 +22,7 @@ const canonical = selectedPost
   : new URL(initialSurface === 'archive' ? '/posts/' : '/', siteConfig.siteUrl);
 const cover = selectedPost?.cover ? new URL(selectedPost.cover, siteConfig.siteUrl) : new URL(siteConfig.logo, siteConfig.siteUrl);
 ---
-<html lang={siteConfig.language}>
+<html lang={siteConfig.language} data-initial-surface={initialSurface}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -54,6 +46,10 @@ const cover = selectedPost?.cover ? new URL(selectedPost.cover, siteConfig.siteU
     <link rel="canonical" href={canonical} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>{pageTitle}</title>
+    {initialSurface === 'town' && <link rel="preload" href="/assets/brick-town/studio.env" as="fetch" crossorigin="anonymous" />}
+    <script>
+      import '../scripts/town-startup';
+    </script>
   </head>
   <body><TownBlogApp client:load posts={posts} layout={layout} initialSurface={initialSurface} initialPostId={initialPostId} /></body>
 </html>
