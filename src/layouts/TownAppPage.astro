@@ -44,6 +44,7 @@ const cover = selectedPost?.cover ? new URL(selectedPost.cover, siteConfig.siteU
     <meta property="og:image" content={cover} />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="application/rss+xml" title={`${siteConfig.title} · RSS`} href={new URL('/rss.xml', siteConfig.siteUrl)} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>{pageTitle}</title>
     {initialSurface === 'town' && <link rel="preload" href="/assets/brick-town/studio.env" as="fetch" crossorigin="anonymous" />}

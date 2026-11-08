@@ -46,6 +46,10 @@ const mathHeading = article.sections.find((section) => section.heading?.text.inc
 assert.match(mathHeading.heading.html, /<mark>高亮<\/mark>/);
 assert.match(mathHeading.heading.html, /role="math"/);
 assert.deepEqual(article.sections.map((section) => section.heading?.level), [undefined, 1, 2, 3, 2]);
+// The heading marker and type scale use normalized article levels, not raw # depth.
+const normalizedHeadings = await renderArticleMarkdown('## 一级\n\n### 二级\n\n#### 三级\n\n###### 五级');
+assert.deepEqual(normalizedHeadings.sections.map(({ heading }) => heading?.level), [1, 2, 3, 5]);
+assert.deepEqual(normalizedHeadings.sections.map(({ heading }) => heading?.text), ['一级', '二级', '三级', '五级']);
 assert(article.wordCount > 100 && article.readingTime >= 1);
 
 const bad = await renderArticleMarkdown(`
