@@ -252,7 +252,7 @@ npm run check            # Astro 与 TypeScript 检查
 npm run build            # 构建静态站点
 npm run verify:content   # 检查文章 ID 与本地资源引用
 npm run verify:markdown  # 检查 Markdown、公式、图表、嵌入与 HTML 安全过滤
-npm run verify           # 执行完整检查、构建和小镇回归测试
+npm run verify           # 类型检查、构建、内容与核心功能检查
 npm run preview          # 本地预览 dist/ 构建结果
 ```
 
@@ -522,21 +522,7 @@ export const commentConfig: CommentConfig = {
 
 评论区在接近文章底部时才加载，支持日夜主题切换；正文阅读进度不包含评论区。读者可直接阅读，登录 GitHub 并授权 Giscus 后即可评论或回应。GitHub 授权会话保存在浏览器本地的 `giscus-session` 中；评论不可用时可重试或前往 GitHub Discussions。
 
-### 本地检查（可选）
-
-启动开发服务后，可检查默认关闭状态。检查需要至少两篇已发布文章，以及 Playwright 浏览器或本机 Chrome：
-
-```bash
-PLAYWRIGHT_CHANNEL=chrome npm run verify:giscus-ui
-```
-
-填好配置并启用评论后，使用以下命令检查懒加载、失败重试、文章映射、主题切换和登录回跳：
-
-```bash
-PLAYWRIGHT_CHANNEL=chrome npm run verify:giscus-ui -- --enabled
-```
-
-两种检查均使用模拟评论服务，不会发布真实评论。若服务运行在其他地址，可添加 `TOWN_BLOG_TEST_URL=http://127.0.0.1:4325` 指定地址。
+启用后，建议用一篇已发布文章手动检查评论区的加载、主题切换和 GitHub 登录；框架不附带浏览器自动化脚本。
 
 
 ## 15. 加载性能与运行时节能
@@ -552,27 +538,7 @@ PLAYWRIGHT_CHANNEL=chrome npm run verify:giscus-ui -- --enabled
 
 判断线上加载表现时，请先执行 `npm run build`，再用 `npm run preview` 检查生产构建。开发服务器还包含即时内容处理、依赖预构建与热更新，耗时不能直接代表线上静态页面。真实体验也受网络、设备 GPU、浏览器缓存和文章规模影响，不能把本机测试时间视为所有设备的保证。
 
-### 性能回归检查
-
-```bash
-npm run verify                     # 包含地块缓存、实例矩阵、空间查询等回归
-npm run build                      # 以下冷启动检查使用 dist/，修改代码后先重建
-PLAYWRIGHT_CHANNEL=chrome npm run verify:assets
-PLAYWRIGHT_CHANNEL=chrome npm run verify:startup
-PLAYWRIGHT_CHANNEL=chrome npm run verify:desktop-startup
-```
-
-`verify:assets` 检查环境贴图解码并上传 GPU 后的像素是否与原始指纹一致。两项启动检查自行启动生产静态服务，检查冷启动预算、字体延后加载、环境贴图只下载一次和运行错误；浏览器/设备模拟仅用于回归，不等于真实手机的测试结果。没有本机 Chrome 时，可先安装 Playwright Chromium，再省略 `PLAYWRIGHT_CHANNEL=chrome`。
-
-有已发布文章时，可针对运行中的生产预览检查交互与资源释放（将地址替换为终端实际输出的地址）：
-
-```bash
-TOWN_BLOG_TEST_URL=http://127.0.0.1:4321 PLAYWRIGHT_CHANNEL=chrome npm run verify:runtime
-TOWN_BLOG_TEST_URL=http://127.0.0.1:4321 PLAYWRIGHT_CHANNEL=chrome npm run verify:mobile-ui
-TOWN_BLOG_TEST_URL=http://127.0.0.1:4321 PLAYWRIGHT_CHANNEL=chrome npm run verify:mobile-view
-```
-
-`verify:runtime` 需要至少一篇已发布文章，检查减少动态效果模式静止时零绘制、操作后恢复、后台暂停，以及往返小镇/档案后的堆内存与 DOM 是否持续增长。`verify:mobile-view` 还需要至少两篇同系列的已发布文章，用于验证手机视口稳定与系列目录吸顶。框架默认文章目录为空，测试用文章应由你自行准备，不需要为此保留示例文章。
+`npm run verify` 包含内容、四季切换、Markdown 和 RSS 检查。针对新增文章后的建筑位置、冷启动、GPU 占用与手机滑动体验，请在自己的设备上用生产构建（`npm run build && npm run preview`）测试；框架不附带依赖特定文章、浏览器或硬件的专项脚本。
 
 
 ## 16. 全文 RSS 订阅

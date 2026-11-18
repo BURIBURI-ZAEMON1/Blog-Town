@@ -164,7 +164,7 @@ pnpm new "My First Post" # 创建包含基础 Frontmatter 的 Markdown 草稿
 npm run dev              # 启动开发服务器
 npm run check            # Astro 与 TypeScript 检查
 npm run build            # 构建静态站点
-npm run verify           # 完整检查、构建和小镇回归测试
+npm run verify           # 类型检查、构建、内容与核心功能检查
 npm run verify:markdown  # 检查富 Markdown、嵌入与 HTML 安全过滤
 npm run preview          # 预览 dist/ 构建结果
 ```

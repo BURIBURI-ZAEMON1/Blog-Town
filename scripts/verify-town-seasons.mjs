@@ -25,7 +25,7 @@ for(let month=0;month<12;month++)assert.equal(getSeasonForDate(new Date(2026,mon
 const summaries=[];
 for(const mobile of [false,true]) {
   const engine=new NullEngine(),scene=new Scene(engine);
-  const layout=createTownLayout('heavens-door-town-v1',[
+  const layout=createTownLayout('framework-seasons-test',[
     {id:'first',series:'notes',seriesIndex:1},{id:'second',series:'notes',seriesIndex:2},{id:'third'},
   ]);
   const originalLayout=JSON.stringify(layout);
@@ -92,5 +92,5 @@ const rain=createPrecipitationField(randomFor('same-seed'),500,townBoard,'rain')
 const snow=createPrecipitationField(randomFor('same-seed'),500,townBoard,'snow');
 assert(snow.every((drop,index)=>drop.speed<rain[index].speed),'snow should fall slower than rain');
 assert(rain.every(drop=>Number.isFinite(drop.x+drop.y+drop.z+drop.speed)));
-assert(Array.from({length:96},(_,slot)=>weatherIsPrecipitating('heavens-door-town-v1',slot)).some(Boolean));
+assert(Array.from({length:96},(_,slot)=>weatherIsPrecipitating('framework-seasons-test',slot)).some(Boolean));
 console.log(JSON.stringify({message:'Season layout/picking/occupancy, repeated disposal, reduced motion and shared weather PASS',summaries},null,2));
