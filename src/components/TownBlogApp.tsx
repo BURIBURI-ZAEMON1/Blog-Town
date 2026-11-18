@@ -160,6 +160,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResultIndex, setSearchResultIndex] = useState(0);
   const [searchEntries, setSearchEntries] = useState<SearchEntry[]>();
+  const [searchIndexStatus, setSearchIndexStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [searchRetry, setSearchRetry] = useState(0);
   const searchIndexRequested = useRef(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -219,6 +221,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   useEffect(() => {
     if (!(searchOpen || query.trim()) || searchEntries || searchIndexRequested.current) return;
     searchIndexRequested.current = true;
+    setSearchIndexStatus('loading');
     fetch('/data/search-index.json')
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -226,12 +229,13 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         if (!Array.isArray(data)) throw new Error('Invalid search payload');
         return data as SearchEntry[];
       })
-      .then((entries) => setSearchEntries(entries))
+      .then((entries) => { setSearchEntries(entries); setSearchIndexStatus('idle'); })
       .catch(() => {
         // Summary fields still provide a usable search; allow a later retry.
         searchIndexRequested.current = false;
+        setSearchIndexStatus('error');
       });
-  }, [query, searchEntries, searchOpen]);
+  }, [query, searchEntries, searchOpen, searchRetry]);
   useEffect(() => {
     updatePageMeta(surface, selectedPost);
   }, [selectedPost, surface]);
@@ -495,7 +499,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
           <button ref={menuButtonRef} className="mobile-sidebar-toggle" type="button" aria-label={mobileSidebarOpen ? '关闭侧边栏' : '打开侧边栏'} aria-expanded={mobileSidebarOpen} aria-controls="site-sidebar" onClick={openMobileSidebar}>{icon(mobileSidebarOpen ? 'close' : 'menu')}</button>
           <a className="top-wordmark" href="https://github.com/BURIBURI-ZAEMON1/Blog-Town" target="_blank" rel="noreferrer noopener" aria-label="Blog Town GitHub 仓库"><span>Blog</span> <strong>Town</strong>{icon('external')}</a>
           <nav className="desktop-top-links" aria-label="主导航"><a className={`topnav-link ${surface === 'town' ? 'is-active' : ''}`} href="/" onClick={(event) => handleInternalClick(event, () => navigate('town'))}><span>小镇</span></a><a className={`topnav-link ${surface === 'archive' ? 'is-active' : ''}`} href="/posts/" onClick={(event) => handleInternalClick(event, () => { setQuery(''); setActiveCategory(undefined); setActiveTag(undefined); navigate('archive'); })}><span>档案</span></a></nav>
-          <div className="topnav-center" id="topnav-search"><div className="top-search"><span>{icon('search')}</span><input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); setSearchResultIndex(0); }} onFocus={() => setSearchOpen(true)} onKeyDown={onSearchKeyDown} placeholder="寻找一篇笔记…" aria-label="搜索文章" /><kbd>⌘ K</kbd>{searchOpen && query && <SearchDropdown results={searchResults} activeIndex={searchResultIndex} onHover={onSidebarPostHover} onOpen={openArticle} onArchive={() => { setSearchOpen(false); navigate('archive'); }} />}</div></div>
+          <div className="topnav-center" id="topnav-search"><div className="top-search"><span>{icon('search')}</span><input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); setSearchResultIndex(0); }} onFocus={() => setSearchOpen(true)} onKeyDown={onSearchKeyDown} placeholder="寻找一篇笔记…" aria-label="搜索文章" /><kbd>⌘ K</kbd>{searchOpen && query && <SearchDropdown results={searchResults} activeIndex={searchResultIndex} onHover={onSidebarPostHover} onOpen={openArticle} onArchive={() => { setSearchOpen(false); navigate('archive'); }} status={searchIndexStatus} onRetry={() => { searchIndexRequested.current = false; setSearchIndexStatus('idle'); setSearchRetry((value) => value + 1); }} />}</div></div>
           <div className="topnav-actions"><button className="mobile-search-toggle" aria-controls="topnav-search" aria-label={searchOpen ? '关闭搜索' : '打开搜索'} aria-expanded={searchOpen} onClick={() => { if (searchOpen) { setSearchOpen(false); inputRef.current?.blur(); } else { setSearchOpen(true); window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })); } }}>{icon(searchOpen ? 'close' : 'search')}</button><button className="mode-button" onClick={toggleColorMode} aria-label="切换昼夜模式">{colorMode === 'day' ? icon('moon') : icon('sun')}<span>{colorMode === 'day' ? '夜间' : '日间'}</span></button><label className="season-control" title={SEASON_PROFILES[season].description}>
             <span className="visually-hidden">小镇季节</span>{icon(SEASON_PROFILES[season].glyph)}
             <select aria-label="小镇季节" value={automaticSeason ? 'auto' : season} onChange={(event) => {
@@ -541,7 +545,7 @@ function SidebarContent({ mobileOpen, panel, posts, categories, tags, activeCate
 function SidebarPanelHeader({ title, eyebrow, onBack }: { title: string; eyebrow: string; onBack?: () => void }) { return <div className="sidebar-panel-header">{onBack && <button onClick={onBack} aria-label="返回面板">{icon('back')}</button>}<div><span>{eyebrow}</span><strong>{title}</strong></div></div>; }
 function SidebarPostList({ posts, hoveredPostId, onHover, onOpenArticle }: { posts: TownPostSummary[]; hoveredPostId?: string; onHover: (id?: string) => void; onOpenArticle: (id: string) => void }) { return <div className="sidebar-posts">{posts.map((post, index) => <a key={post.id} href={`/posts/${encodeURIComponent(post.id)}/`} className={`sidebar-post ${hoveredPostId === post.id ? 'is-hovered' : ''}`} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onHover(post.id); }} onPointerLeave={(event) => { if (event.pointerType === 'mouse') onHover(undefined); }} onClick={(event) => handleInternalClick(event, () => onOpenArticle(post.id))}><span className="sidebar-post-index">{String(index + 1).padStart(2, '0')}</span><span><strong>{post.title}</strong><small>{post.category} · {formatDate(post.date)}</small></span>{icon('chevron')}</a>)}</div>; }
 
-function SearchDropdown({ results, activeIndex, onHover, onOpen, onArchive }: { results: TownPostSummary[]; activeIndex: number; onHover: (id?: string) => void; onOpen: (id: string) => void; onArchive: () => void }) { return <div className="search-dropdown"><span className="dropdown-label">SEARCHING THE TOWN · {results.length}</span>{results.length ? results.map((post, index) => <a key={post.id} href={`/posts/${encodeURIComponent(post.id)}/`} className={`search-result ${index === activeIndex ? 'is-highlighted' : ''}`} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onHover(post.id); }} onClick={(event) => handleInternalClick(event, () => onOpen(post.id))}><span className="search-result-index">0{index + 1}</span><span><strong>{post.title}</strong><small>{post.category} · {post.readingTime} min</small></span>{icon('arrow')}</a>) : <div className="empty-search">没有找到相关笔记。</div>}{results.length > 0 && <a className="dropdown-full" href="/posts/" onClick={(event) => handleInternalClick(event, onArchive)}>查看全部结果 {icon('arrow')}</a>}</div>; }
+function SearchDropdown({ results, activeIndex, onHover, onOpen, onArchive, status, onRetry }: { results: TownPostSummary[]; activeIndex: number; onHover: (id?: string) => void; onOpen: (id: string) => void; onArchive: () => void; status: 'idle' | 'loading' | 'error'; onRetry: () => void }) { return <div className="search-dropdown"><span className="dropdown-label">SEARCHING THE TOWN · {status === 'loading' ? '…' : results.length}</span>{status === 'loading' ? <div className="empty-search" role="status" aria-live="polite">正在搜索全文…</div> : status === 'error' ? <div className="empty-search" role="alert">全文搜索暂时不可用。<button type="button" onClick={onRetry}>重新载入</button></div> : results.length ? results.map((post, index) => <a key={post.id} href={`/posts/${encodeURIComponent(post.id)}/`} className={`search-result ${index === activeIndex ? 'is-highlighted' : ''}`} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onHover(post.id); }} onClick={(event) => handleInternalClick(event, () => onOpen(post.id))}><span className="search-result-index">0{index + 1}</span><span><strong>{post.title}</strong><small>{post.category} · {post.readingTime} min</small></span>{icon('arrow')}</a>) : <div className="empty-search">没有找到相关笔记。</div>}{status === 'idle' && results.length > 0 && <a className="dropdown-full" href="/posts/" onClick={(event) => handleInternalClick(event, onArchive)}>查看全部结果 {icon('arrow')}</a>}</div>; }
 
 function TownTooltip({ post, anchor }: { post?: TownPostSummary; anchor?: SceneAnchor }) { if (!post || !anchor) return null; const position = anchor; return <div className="town-tooltip" style={{ left: position.x, top: position.y }}><div className="tooltip-meta"><span>{post.category}</span><span>{post.readingTime} min</span></div><strong>{post.title}</strong><p>{post.description}</p><div className="tooltip-tags">{post.tags.slice(0, 3).map((tag) => <span key={tag}>#{tag}</span>)}</div></div>; }
 
