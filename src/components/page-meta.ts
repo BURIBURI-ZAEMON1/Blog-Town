@@ -1,4 +1,5 @@
 import { siteConfig } from '../config/site';
+import { buildPageJsonLd } from '../lib/page-jsonld';
 import type { TownPostSummary } from '../scene/brick-town/types';
 import type { MainSurface } from './useTownNavigation';
 
@@ -19,7 +20,12 @@ const setMeta = (attribute: 'name' | 'property', key: string, content?: string) 
 
 const setMetaGroup = (attribute: 'name' | 'property', key: string, values: string[]) => {
   document.head.querySelectorAll(`meta[${attribute}="${key}"]`).forEach((element) => element.remove());
-  values.forEach((content) => setMeta(attribute, key, content));
+  values.forEach((content) => {
+    const element = document.createElement('meta');
+    element.setAttribute(attribute, key);
+    element.setAttribute('content', content);
+    document.head.append(element);
+  });
 };
 
 const setCanonical = (href: string) => {
@@ -66,31 +72,5 @@ export function updatePageMeta(surface: MainSurface, selectedPost?: TownPostSumm
   setMetaGroup('property', 'article:tag', selectedPost?.tags ?? []);
   setCanonical(canonical);
 
-  setJsonLd(selectedPost
-    ? {
-        '@context': 'https://schema.org',
-        '@type': 'BlogPosting',
-        headline: selectedPost.title,
-        description: selectedPost.description,
-        datePublished: selectedPost.date,
-        dateModified: selectedPost.updatedAt ?? selectedPost.date,
-        author: { '@type': 'Person', name: siteConfig.profile.name, url: siteConfig.siteUrl },
-        image: cover,
-        mainEntityOfPage: canonical,
-        articleSection: selectedPost.category,
-        keywords: selectedPost.tags.join(', '),
-        wordCount: selectedPost.wordCount,
-        timeRequired: `PT${selectedPost.readingTime}M`,
-        inLanguage: siteConfig.language,
-      }
-    : {
-        '@context': 'https://schema.org',
-        '@type': 'WebSite',
-        name: siteConfig.title,
-        alternateName: siteConfig.shortTitle,
-        url: siteConfig.siteUrl,
-        description: siteConfig.description,
-        inLanguage: siteConfig.language,
-        author: { '@type': 'Person', name: siteConfig.profile.name, url: siteConfig.siteUrl },
-      });
+  setJsonLd(buildPageJsonLd(selectedPost));
 }

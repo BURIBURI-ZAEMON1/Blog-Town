@@ -4,6 +4,7 @@ import { siteConfig } from '../config/site';
 import type { TownLayout } from '../data/town-layout';
 import type { TownPostSummary } from '../components/TownScene';
 import type { ArticleSection } from '../lib/markdown';
+import { buildPageJsonLd } from '../lib/page-jsonld';
 import '../styles/global.css';
 import '../styles/markdown.css';
 
@@ -23,34 +24,7 @@ const canonical = selectedPost
   ? new URL(`/posts/${encodeURIComponent(selectedPost.id)}/`, siteConfig.siteUrl)
   : new URL(initialSurface === 'archive' ? '/posts/' : '/', siteConfig.siteUrl);
 const cover = selectedPost?.cover ? new URL(selectedPost.cover, siteConfig.siteUrl) : new URL(siteConfig.logo, siteConfig.siteUrl);
-const jsonLd = selectedPost
-  ? {
-      '@context': 'https://schema.org',
-      '@type': 'BlogPosting',
-      headline: selectedPost.title,
-      description: selectedPost.description,
-      datePublished: selectedPost.date,
-      dateModified: selectedPost.updatedAt ?? selectedPost.date,
-      author: { '@type': 'Person', name: siteConfig.profile.name, url: siteConfig.siteUrl },
-      image: cover.href,
-      mainEntityOfPage: canonical.href,
-      articleSection: selectedPost.category,
-      keywords: selectedPost.tags.join(', '),
-      wordCount: selectedPost.wordCount,
-      timeRequired: `PT${selectedPost.readingTime}M`,
-      inLanguage: siteConfig.language,
-    }
-  : {
-      '@context': 'https://schema.org',
-      '@type': 'WebSite',
-      name: siteConfig.title,
-      alternateName: siteConfig.shortTitle,
-      url: siteConfig.siteUrl,
-      description: siteConfig.description,
-      inLanguage: siteConfig.language,
-      author: { '@type': 'Person', name: siteConfig.profile.name, url: siteConfig.siteUrl },
-    };
-const jsonLdText = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+const jsonLdText = JSON.stringify(buildPageJsonLd(selectedPost)).replace(/</g, '\\u003c');
 ---
 <html lang={siteConfig.language} data-initial-surface={initialSurface}>
   <head>
