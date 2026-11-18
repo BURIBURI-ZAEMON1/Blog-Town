@@ -6,7 +6,7 @@
 
 ## 1. 快速开始
 
-环境要求：Node.js 20 或更高版本。
+环境要求：Node.js 22.12 或更高版本（Astro 7 要求）。
 
 ```bash
 npm install

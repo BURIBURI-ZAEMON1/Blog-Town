@@ -23,7 +23,7 @@ const stripHtml = (html: string) => decodeHTML(sanitizeHtml(html, { allowedTags:
 
 const sanitizeArticleHtml = (html: string) => sanitizeHtml(html, {
   allowedTags: [...sanitizeHtml.defaults.allowedTags,
-    'img', 'figure', 'figcaption', 'details', 'summary', 'kbd', 'mark', 'del', 'input'],
+    'img', 'figure', 'figcaption', 'details', 'summary', 'kbd', 'mark', 'del', 'input', 'center'],
   allowedAttributes: {
     ...sanitizeHtml.defaults.allowedAttributes,
     a: ['href', 'title', 'target', 'rel', 'download', 'class'],

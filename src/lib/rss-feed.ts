@@ -5,12 +5,12 @@ import { createRssContentRenderer } from './rss-content';
 async function buildRssFeed() {
   // getSiteData already enforces the same draft/date visibility as the website.
   // Reuse its rendered sections, including resolved published-article embeds.
-  const { posts } = await getSiteData();
+  const { posts, contents } = await getSiteData();
   const renderer = createRssContentRenderer(siteConfig.siteUrl);
   const items = [];
   for (const post of posts) {
     const link = new URL(`/posts/${encodeURIComponent(post.id)}/`, siteConfig.siteUrl).href;
-    const content = await renderer.renderSections(post.sections, link);
+    const content = await renderer.renderSections(contents[post.id]?.sections ?? [], link);
     items.push({
       title: post.title, description: post.description, pubDate: new Date(post.date),
       link, categories: [...new Set([post.category, ...post.tags])],

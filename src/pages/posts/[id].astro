@@ -8,6 +8,12 @@ export async function getStaticPaths() {
 }
 
 const { initialPostId } = Astro.props;
-const { posts, layout } = await getSiteData();
+const { posts, layout, contents } = await getSiteData();
 ---
-<TownAppPage posts={posts} layout={layout} initialSurface="article" initialPostId={initialPostId} />
+<TownAppPage
+	posts={posts}
+	layout={layout}
+	initialSurface="article"
+	initialPostId={initialPostId}
+	initialPostContent={contents[initialPostId]?.sections}
+/>
