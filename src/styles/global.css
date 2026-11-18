@@ -1618,3 +1618,52 @@ body { font-family: var(--sans); }
 
 /* Article spacing is carried by the content, without a decorative divider. */
 .article-body { margin-top: 58px; }
+
+/* Navigation is rendered as real links so it remains crawlable and works without JS. */
+a.nav-item,
+a.topnav-link,
+a.recent-card,
+a.archive-row,
+a.sidebar-post,
+a.search-result,
+a.dropdown-full,
+a.touch-preview-read,
+.town-caption a,
+.related-posts a,
+.series-drawer-list a {
+  color: inherit;
+  text-decoration: none;
+}
+.related-posts a {
+  display: grid;
+  gap: 4px;
+  padding: 0 0 9px;
+  text-align: left;
+  cursor: pointer;
+}
+.series-drawer-list a {
+  display: grid;
+  grid-template-columns: 25px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 14px;
+  border-top: 1px solid #eef2f7;
+  color: #64748b;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--display);
+  font-size: 11px;
+}
+.series-drawer-list a:hover,
+.series-drawer-list a.is-current {
+  background: #f8fafc;
+  color: #172033;
+}
+@media (max-width: 720px) {
+  .town-caption a {
+    width: 100%;
+    margin-top: 6px;
+  }
+}

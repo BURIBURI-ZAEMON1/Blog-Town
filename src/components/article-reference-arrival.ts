@@ -1,8 +1,8 @@
-import type { TownPost } from './TownScene';
+import type { ArticleSection } from '../lib/markdown';
 
 // A separate paint layer leaves authored mark, callout and syntax-highlighting
 // colors intact. Its geometry follows the chapter while images/details resize.
-export function showReferenceArrival(target: HTMLElement, body: HTMLElement, sections: TownPost['sections']) {
+export function showReferenceArrival(target: HTMLElement, body: HTMLElement, sections: ArticleSection[]) {
   const headingIndex = sections.findIndex((section) => section.heading?.id === target.id);
   let regions: Element[];
   if (headingIndex >= 0) {

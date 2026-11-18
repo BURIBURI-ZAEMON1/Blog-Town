@@ -1,9 +1,9 @@
 import { useLayoutEffect, useMemo } from 'react';
 import { layoutPostNotices, type PostNoticeFrame, type PostNoticeOffset } from '../data/town-post-notices';
-import type { TownPost } from '../scene/brick-town/types';
+import type { TownPostSummary } from '../scene/brick-town/types';
 
 type Props = {
-  posts: TownPost[];
+  posts: TownPostSummary[];
   newPostIds?: readonly string[];
   frame: PostNoticeFrame;
   reducedMotion: boolean;

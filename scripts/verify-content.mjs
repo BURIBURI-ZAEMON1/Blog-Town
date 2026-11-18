@@ -22,13 +22,22 @@ for (const name of files) {
   if (townId && townIds.has(townId)) failures.push(`${name}: duplicate townId ${townId} (also in ${townIds.get(townId)})`);
   if (townId) townIds.set(townId, name);
 
-  const localReferences = [...source.matchAll(/(?:\]\(|(?:src|href)=["'])(\/[^)"']+)/g)].map((match) => match[1]);
+  const body = source.slice(frontmatter[0].length);
+  // Markdown links inside fenced or inline code are examples, not references.
+  const prose = body
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/~~~[\s\S]*?~~~/g, '')
+    .replace(/`[^`\n]*`/g, '');
+
+  const localReferences = [...prose.matchAll(/(?:\]\(|(?:src|href)=["'])(\/[^)"']+)/g)].map((match) => match[1]);
   for (const reference of localReferences) {
-    const clean = decodeURI(reference.split(/[?#]/, 1)[0]);
+    let clean;
+    try { clean = decodeURIComponent(reference.split(/[?#]/, 1)[0]); }
+    catch { failures.push(`${name}: invalid URL encoding in ${reference}`); continue; }
     if (!existsSync(join(publicDir, clean.replace(/^\//, '')))) failures.push(`${name}: missing public asset ${reference}`);
   }
 
-  const relativeReferences = [...source.matchAll(/!?\[[^\]]*\]\((?!https?:\/\/|mailto:|#|\/)([^)]+)\)/g)].map((match) => match[1]);
+  const relativeReferences = [...prose.matchAll(/!?\[[^\]]*\]\((?!https?:\/\/|mailto:|#|\/)([^)]+)\)/g)].map((match) => match[1]);
   for (const reference of relativeReferences) failures.push(`${name}: unresolved relative link ${reference}`);
 }
 

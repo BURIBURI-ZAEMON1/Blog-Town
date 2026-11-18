@@ -5,7 +5,7 @@ import type { TownSceneProps } from '../scene/brick-town/types';
 import type { mountBrickTown } from '../scene/brick-town/runtime';
 import TownPostNotices from './TownPostNotices';
 import type { PostNoticeFrame } from '../data/town-post-notices';
-export type { TownPost, SceneAnchor } from '../scene/brick-town/types';
+export type { TownPost, TownPostSummary, TownPostContent, SceneAnchor } from '../scene/brick-town/types';
 
 type TownSceneLifecycleProps = TownSceneProps & {
   onLoadingStart?: () => void;

@@ -2,6 +2,7 @@
    another UI shell. Rich renderer dependencies never run in the browser. */
 .article-section-content mark,
 .article-heading-row mark { background: #f3e6ac; color: #514019; padding: .08em .18em; border-radius: 2px; box-decoration-break: clone; }
+.article-section-content center { display: block; text-align: center; }
 .article-section-content del { text-decoration-thickness: 1px; opacity: .72; }
 .article-section-content input[type="checkbox"] { width: 1em; height: 1em; margin: 0 .45em 0 -.1em; vertical-align: -.1em; accent-color: var(--sage); opacity: 1; }
 .article-section-content li:has(> input[type="checkbox"], > p > input[type="checkbox"]) { list-style: none; }

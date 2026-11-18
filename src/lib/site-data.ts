@@ -4,6 +4,7 @@ import { createTownLayout } from '../data/town-layout';
 import { siteConfig } from '../config/site';
 import { createMarkdownResources } from './markdown-embeds';
 import { renderArticleMarkdown } from './markdown';
+import type { SearchEntry, TownPost, TownPostContent, TownPostSummary } from '../scene/brick-town/types';
 
 
 const buildSiteData = async () => {
@@ -37,7 +38,7 @@ const buildSiteData = async () => {
     key: entry.id, title: entry.data.title, markdown: entry.body ?? '',
     href: `/posts/${encodeURIComponent(entry.data.townId)}/`, assetDirectory: `/assets/posts/${entry.id}`,
   })));
-  const posts = (await Promise.all(entries
+  const fullPosts = (await Promise.all(entries
     .map(async (entry) => {
       const rendered = await renderArticleMarkdown(entry.body ?? '', { resources, documentKey: entry.id });
       return {
@@ -59,10 +60,26 @@ const buildSiteData = async () => {
         searchText: rendered.searchText,
       };
     })))
-    .sort((a, b) => +new Date(b.date) - +new Date(a.date));
+    .sort((a, b) => +new Date(b.date) - +new Date(a.date)) as TownPost[];
+
+  const posts: TownPostSummary[] = fullPosts.map(({ sections: _sections, searchText: _searchText, ...summary }) => summary);
+  const contents: Record<string, TownPostContent> = Object.fromEntries(
+    fullPosts.map((post) => [post.id, { id: post.id, sections: post.sections }]),
+  );
+  const searchIndex: SearchEntry[] = fullPosts.map((post) => ({
+    id: post.id,
+    title: post.title,
+    category: post.category,
+    tags: post.tags,
+    series: post.series,
+    description: post.description,
+    searchText: post.searchText,
+  }));
 
   return {
     posts,
+    contents,
+    searchIndex,
     layout: createTownLayout(siteConfig.townSeed, posts),
   };
 };

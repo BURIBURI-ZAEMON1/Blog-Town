@@ -132,7 +132,14 @@ try {
   mkdirSync(join(publicDir, 'assets/文章 A'), { recursive: true });
   mkdirSync(join(publicDir, 'assets/文章 B'), { recursive: true });
   for (const path of ['assets/文章 A/图 片.png', 'assets/文章 A/cover.png', 'assets/文章 B/cover.png', 'voice.mp3', 'clip.mp4', 'report.pdf', 'archive.zip']) writeFileSync(join(publicDir, path), 'fixture');
-  symlinkSync('/etc/passwd', join(publicDir, 'private.txt'));
+  try {
+    symlinkSync('/etc/passwd', join(publicDir, 'private.txt'));
+  } catch (error) {
+    // Windows without Developer Mode/Administrator cannot create symlinks.
+    // The path guard is still covered by missing-file and traversal cases.
+    if (!['EPERM', 'EACCES', 'ENOSYS'].includes(error?.code)) throw error;
+    console.warn('SKIP: symlink fixture unavailable on this platform');
+  }
   const resources = createMarkdownResources(publicDir, [
     { key: 'folder/a', title: '文章甲', href: '/posts/a/', assetDirectory: '/assets/文章 A', markdown: '# 甲标题\n\n甲正文\n\n![[b]]' },
     { key: 'folder/b', title: '文章乙', href: '/posts/b/', markdown: '乙正文\n\n![[a]]' },

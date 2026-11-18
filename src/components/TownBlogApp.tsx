@@ -1,11 +1,14 @@
 import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ElementType } from 'react';
-import type { SceneAnchor, TownPost } from './TownScene';
+import type { SceneAnchor, TownPostSummary } from './TownScene';
+import type { SearchEntry } from '../scene/brick-town/types';
+import type { ArticleSection } from '../lib/markdown';
 import TownLoading from './TownLoading';
 import SidebarImage from './SidebarImage';
 import { requestTownFonts } from '../lib/town-fonts';
 import { commentConfig } from '../config/comments';
 import { showReferenceArrival } from './article-reference-arrival';
+import { updatePageMeta } from './page-meta';
 import { useTownNavigation, type MainSurface, type TownNavigation } from './useTownNavigation';
 import { useNewPostIds } from './useNewPostIds';
 import { useTownExploration } from './useTownExploration';
@@ -20,7 +23,13 @@ type SidebarPanel = 'profile' | 'list' | 'categories' | 'category-posts' | 'tags
 type ColorMode = 'day' | 'night';
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-type Props = { posts: TownPost[]; layout: TownLayout; initialSurface?: MainSurface; initialPostId?: string };
+type Props = {
+  posts: TownPostSummary[];
+  layout?: TownLayout;
+  initialSurface?: MainSurface;
+  initialPostId?: string;
+  initialPostContent?: ArticleSection[];
+};
 const ARTICLE_HEADING_TAGS: Record<number, ElementType> = { 1: 'h2', 2: 'h3', 3: 'h4', 4: 'h5', 5: 'h6', 6: 'h6' };
 type TownMapModel = ReturnType<typeof createTownMapModel>;
 
@@ -37,9 +46,9 @@ const TownScene = lazy(async () => {
 });
 
 type TownStageProps = TownSceneProps & {
-  hoveredPost?: TownPost;
+  hoveredPost?: TownPostSummary;
   hoverAnchor?: SceneAnchor;
-  touchPost?: TownPost;
+  touchPost?: TownPostSummary;
   onCloseTouchPreview: () => void;
 };
 
@@ -60,7 +69,7 @@ function TownStage({ hoveredPost, hoverAnchor, touchPost, onCloseTouchPreview, .
       <button className="touch-preview-close" aria-label="关闭建筑预览" onClick={onCloseTouchPreview}>{icon('close')}</button>
       <div className="tooltip-meta"><span>{touchPost.category}</span><span>{touchPost.readingTime} min</span></div>
       <strong>{touchPost.title}</strong><p>{touchPost.description}</p>
-      <button className="touch-preview-read" onClick={() => { sceneProps.onTownExplored?.(); sceneProps.onSelectPost(touchPost.id); }}>阅读文章 {icon('arrow')}</button>
+      <a className="touch-preview-read" href={`/posts/${encodeURIComponent(touchPost.id)}/`} onClick={(event) => { event.preventDefault(); sceneProps.onTownExplored?.(); sceneProps.onSelectPost(touchPost.id); }}>阅读文章 {icon('arrow')}</a>
     </div>}
   </div>;
 }
@@ -96,7 +105,7 @@ const formatDate = (value: string) => {
   if (Number.isNaN(date.valueOf())) return value;
   return `${String(date.getFullYear()).slice(-2)}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
-const getScore = (post: TownPost, query: string) => {
+const getScore = (post: TownPostSummary, query: string, searchText = '') => {
   const needle = query.trim().toLowerCase();
   if (!needle) return 0;
   let score = 0;
@@ -105,12 +114,17 @@ const getScore = (post: TownPost, query: string) => {
   if (post.tags.join(' ').toLowerCase().includes(needle)) score += 34;
   if (post.series?.toLowerCase().includes(needle)) score += 30;
   if (post.description.toLowerCase().includes(needle)) score += 15;
-  if (post.searchText.toLowerCase().includes(needle)) score += 8;
+  if (searchText.toLowerCase().includes(needle)) score += 8;
   return score;
 };
 
-export default function TownBlogApp({ posts, layout, initialSurface = 'town', initialPostId }: Props) {
+export default function TownBlogApp({ posts, layout, initialSurface = 'town', initialPostId, initialPostContent }: Props) {
   const initialPost = initialPostId ? posts.find((post) => post.id === initialPostId) : undefined;
+  const [contentById, setContentById] = useState<Record<string, ArticleSection[]>>(() =>
+    initialPostId && initialPostContent ? { [initialPostId]: initialPostContent } : {},
+  );
+  const [contentError, setContentError] = useState<string>();
+  const [contentRetry, setContentRetry] = useState(0);
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('profile');
   const [hoveredPostId, setHoveredPostId] = useState<string>();
   const [hoverAnchor, setHoverAnchor] = useState<SceneAnchor>();
@@ -138,7 +152,9 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   }, [automaticSeason]);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchIndex, setSearchIndex] = useState(0);
+  const [searchResultIndex, setSearchResultIndex] = useState(0);
+  const [searchEntries, setSearchEntries] = useState<SearchEntry[]>();
+  const searchIndexRequested = useRef(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [touchPostId, setTouchPostId] = useState<string>();
@@ -154,23 +170,66 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
 
   const postMap = useMemo(() => new Map(posts.map((post) => [post.id, post])), [posts]);
   const sortedPosts = useMemo(() => [...posts].sort((a, b) => +new Date(b.date) - +new Date(a.date)), [posts]);
+  const searchTextByPost = useMemo(() => new Map((searchEntries ?? []).map((entry) => [entry.id, entry.searchText])), [searchEntries]);
   const categories = useMemo(() => [...new Set(posts.map((post) => post.category))], [posts]);
   const tags = useMemo(() => [...new Set(posts.flatMap((post) => post.tags))], [posts]);
   const filteredPosts = useMemo(() => sortedPosts.filter((post) => {
-    const matchesQuery = !query || getScore(post, query) > 0;
+    const matchesQuery = !query || getScore(post, query, searchTextByPost.get(post.id)) > 0;
     const matchesCategory = !activeCategory || post.category === activeCategory;
     const matchesTag = !activeTag || post.tags.includes(activeTag);
     return matchesQuery && matchesCategory && matchesTag;
-  }), [activeCategory, activeTag, query, sortedPosts]);
+  }), [activeCategory, activeTag, query, searchTextByPost, sortedPosts]);
   const searchResults = useMemo(() => sortedPosts
-    .map((post) => ({ post, score: getScore(post, query) }))
+    .map((post) => ({ post, score: getScore(post, query, searchTextByPost.get(post.id)) }))
     .filter((result) => result.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, 6)
-    .map((result) => result.post), [query, sortedPosts]);
+    .map((result) => result.post), [query, searchTextByPost, sortedPosts]);
   const selectedPost = selectedPostId ? postMap.get(selectedPostId) : undefined;
+  const selectedSections = selectedPostId ? contentById[selectedPostId] : undefined;
   useEffect(() => {
-    document.title = selectedPost ? `${selectedPost.title} · ${siteConfig.title}` : surface === 'archive' ? `全部文章 · ${siteConfig.title}` : siteConfig.title;
+    if (surface !== 'article' || !selectedPostId || contentById[selectedPostId]) {
+      setContentError(undefined);
+      return;
+    }
+    let cancelled = false;
+    setContentError(undefined);
+    fetch(`/data/posts/${encodeURIComponent(selectedPostId)}.json`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error('Invalid article payload');
+        return data as ArticleSection[];
+      })
+      .then((sections) => {
+        if (cancelled) return;
+        setContentById((current) => ({ ...current, [selectedPostId]: sections }));
+      })
+      .catch(() => {
+        if (!cancelled) setContentError(selectedPostId);
+      });
+    return () => { cancelled = true; };
+  }, [contentById, contentRetry, selectedPostId, surface]);
+  useEffect(() => {
+    if (!(searchOpen || query.trim()) || searchEntries || searchIndexRequested.current) return;
+    searchIndexRequested.current = true;
+    let cancelled = false;
+    fetch('/data/search-index.json')
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error('Invalid search payload');
+        return data as SearchEntry[];
+      })
+      .then((entries) => { if (!cancelled) setSearchEntries(entries); })
+      .catch(() => {
+        // Summary fields still provide a usable search; allow a later retry.
+        searchIndexRequested.current = false;
+      });
+    return () => { cancelled = true; };
+  }, [query, searchEntries, searchOpen]);
+  useEffect(() => {
+    updatePageMeta(surface, selectedPost);
   }, [selectedPost, surface]);
   const newPostIds = useNewPostIds(posts, surface === 'article' ? selectedPost?.id : undefined);
   const { showGuide, markExplored } = useTownExploration();
@@ -378,12 +437,12 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setSearchIndex((index) => Math.min(index + 1, Math.max(0, searchResults.length - 1)));
+      setSearchResultIndex((index) => Math.min(index + 1, Math.max(0, searchResults.length - 1)));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      setSearchIndex((index) => Math.max(0, index - 1));
-    } else if (event.key === 'Enter' && searchResults[searchIndex]) {
-      openArticle(searchResults[searchIndex].id);
+      setSearchResultIndex((index) => Math.max(0, index - 1));
+    } else if (event.key === 'Enter' && searchResults[searchResultIndex]) {
+      openArticle(searchResults[searchResultIndex].id);
       setSearchOpen(false);
     }
   };
@@ -405,8 +464,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
             </nav>
             <div className="mobile-sidebar-nav">
               <nav className="primary-nav">
-                <button className={`nav-item ${surface === 'town' && sidebarPanel === 'profile' ? 'is-active' : ''}`} onClick={() => navigate('town')}>{icon('home')}<span>小镇首页</span><span className="nav-count">01</span></button>
-                <button className={`nav-item ${surface === 'archive' ? 'is-active' : ''}`} onClick={() => { setQuery(''); setActiveCategory(undefined); setActiveTag(undefined); navigate('archive'); }}>{icon('archive')}<span>全部文章</span><span className="nav-count">{String(posts.length).padStart(2, '0')}</span></button>
+                <a className={`nav-item ${surface === 'town' && sidebarPanel === 'profile' ? 'is-active' : ''}`} href="/" onClick={(event) => { event.preventDefault(); navigate('town'); }}>{icon('home')}<span>小镇首页</span><span className="nav-count">01</span></a>
+                <a className={`nav-item ${surface === 'archive' ? 'is-active' : ''}`} href="/posts/" onClick={(event) => { event.preventDefault(); setQuery(''); setActiveCategory(undefined); setActiveTag(undefined); navigate('archive'); }}>{icon('archive')}<span>全部文章</span><span className="nav-count">{String(posts.length).padStart(2, '0')}</span></a>
               </nav>
               <div className="sidebar-section-label">探索</div>
               <nav className="secondary-nav">
@@ -431,8 +490,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         <header className={`topnav ${searchOpen ? 'is-search-open' : ''}`}>
           <button ref={menuButtonRef} className="mobile-sidebar-toggle" type="button" aria-label={mobileSidebarOpen ? '关闭侧边栏' : '打开侧边栏'} aria-expanded={mobileSidebarOpen} aria-controls="site-sidebar" onClick={openMobileSidebar}>{icon(mobileSidebarOpen ? 'close' : 'menu')}</button>
           <a className="top-wordmark" href="https://github.com/BURIBURI-ZAEMON1/Blog-Town" target="_blank" rel="noreferrer noopener" aria-label="Blog Town GitHub 仓库"><span>Blog</span> <strong>Town</strong>{icon('external')}</a>
-          <nav className="desktop-top-links" aria-label="主导航"><button className={`topnav-link ${surface === 'town' ? 'is-active' : ''}`} onClick={() => navigate('town')}><span>小镇</span></button><button className={`topnav-link ${surface === 'archive' ? 'is-active' : ''}`} onClick={() => { setQuery(''); setActiveCategory(undefined); setActiveTag(undefined); navigate('archive'); }}><span>档案</span></button></nav>
-          <div className="topnav-center" id="topnav-search"><div className="top-search"><span>{icon('search')}</span><input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); setSearchIndex(0); }} onFocus={() => setSearchOpen(true)} onKeyDown={onSearchKeyDown} placeholder="寻找一篇笔记…" aria-label="搜索文章" /><kbd>⌘ K</kbd>{searchOpen && query && <SearchDropdown results={searchResults} activeIndex={searchIndex} onHover={onSidebarPostHover} onOpen={openArticle} onArchive={() => { setSearchOpen(false); navigate('archive'); }} />}</div></div>
+          <nav className="desktop-top-links" aria-label="主导航"><a className={`topnav-link ${surface === 'town' ? 'is-active' : ''}`} href="/" onClick={(event) => { event.preventDefault(); navigate('town'); }}><span>小镇</span></a><a className={`topnav-link ${surface === 'archive' ? 'is-active' : ''}`} href="/posts/" onClick={(event) => { event.preventDefault(); setQuery(''); setActiveCategory(undefined); setActiveTag(undefined); navigate('archive'); }}><span>档案</span></a></nav>
+          <div className="topnav-center" id="topnav-search"><div className="top-search"><span>{icon('search')}</span><input ref={inputRef} value={query} onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); setSearchResultIndex(0); }} onFocus={() => setSearchOpen(true)} onKeyDown={onSearchKeyDown} placeholder="寻找一篇笔记…" aria-label="搜索文章" /><kbd>⌘ K</kbd>{searchOpen && query && <SearchDropdown results={searchResults} activeIndex={searchResultIndex} onHover={onSidebarPostHover} onOpen={openArticle} onArchive={() => { setSearchOpen(false); navigate('archive'); }} />}</div></div>
           <div className="topnav-actions"><button className="mobile-search-toggle" aria-controls="topnav-search" aria-label={searchOpen ? '关闭搜索' : '打开搜索'} aria-expanded={searchOpen} onClick={() => { if (searchOpen) { setSearchOpen(false); inputRef.current?.blur(); } else { setSearchOpen(true); window.requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true })); } }}>{icon(searchOpen ? 'close' : 'search')}</button><button className="mode-button" onClick={toggleColorMode} aria-label="切换昼夜模式">{colorMode === 'day' ? icon('moon') : icon('sun')}<span>{colorMode === 'day' ? '夜间' : '日间'}</span></button><label className="season-control" title={SEASON_PROFILES[season].description}>
             <span className="visually-hidden">小镇季节</span>{icon(SEASON_PROFILES[season].glyph)}
             <select aria-label="小镇季节" value={automaticSeason ? 'auto' : season} onChange={(event) => {
@@ -449,15 +508,17 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         {surface === 'archive' && <ArchiveHeading postCount={posts.length} />}
         <div className="main-scroll" ref={mainSurfaceRef}>
         {surface === 'town' && <section className="town-home">
+          <h1 className="visually-hidden">{siteConfig.title} — {siteConfig.tagline}</h1>
           <TownStage posts={posts} layout={layout} newPostIds={newPostIds} guidePostId={guidePostId} onTownExplored={markExplored} season={season} activePostId={selectedPostId} hoveredPostId={touchPostId ?? hoveredPostId} query={query} category={highlightCategory} tag={highlightTag} categoryPreview={Boolean(previewCategory)} tagPreview={Boolean(previewTag)} colorMode={colorMode} reducedMotion={reducedMotion} onHoverPost={onHoverPost} onResolvePostAnchor={onResolvePostAnchor} onSelectPost={selectScenePost} hoveredPost={hoveredPost} hoverAnchor={hoverAnchor} touchPost={touchPost} onCloseTouchPreview={() => setTouchPostId(undefined)} />
           <p className="mobile-town-hint">点击建筑预览，再次点击或选择「阅读文章」打开；单指任意方向拖动小镇，双指捏合缩放。在小镇外滑动可浏览页面。</p>
           <div className="town-mobile-support">
-            <div className="town-caption"><span><i className="caption-dot" /> {siteConfig.title} · {SEASON_PROFILES[season].label}季小镇</span><span>建筑即文章 / {layout.plots.length} buildings / {posts.length} article floors</span><span className="caption-spacer" /><button onClick={() => navigate('archive')}>打开完整档案 {icon('arrow')}</button></div>
+            <div className="town-caption"><span><i className="caption-dot" /> {siteConfig.title} · {SEASON_PROFILES[season].label}季小镇</span><span>建筑即文章 / {layout?.plots.length ?? 0} buildings / {posts.length} article floors</span><span className="caption-spacer" /><a href="/posts/" onClick={(event) => { event.preventDefault(); navigate('archive'); }}>打开完整档案 {icon('arrow')}</a></div>
             <RecentPosts posts={filteredPosts.slice(0, 5)} hasFilter={Boolean(query || activeCategory || activeTag)} onOpen={openArticle} onClear={clearFilters} />
           </div>
         </section>}
         {surface === 'archive' && <ArchiveView posts={filteredPosts} onOpen={openArticle} />}
-        {surface === 'article' && selectedPost && <ArticleView colorMode={colorMode} navigation={navigation} post={selectedPost} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
+        {surface === 'article' && selectedPost && selectedSections && layout && <ArticleView colorMode={colorMode} navigation={navigation} post={selectedPost} sections={selectedSections} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
+        {surface === 'article' && selectedPost && !selectedSections && <ArticleLoading post={selectedPost} error={contentError === selectedPost.id} onRetry={() => { setContentError(undefined); setContentRetry((value) => value + 1); }} />}
         {surface === 'article' && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
       </main>
@@ -465,7 +526,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   );
 }
 
-function SidebarContent({ mobileOpen, panel, posts, categories, tags, activeCategory, activeTag, hoveredPostId, onHover, onCategoryPreview, onTagPreview, onCategory, onTag, onOpenArticle, onBack }: { mobileOpen: boolean; panel: SidebarPanel; posts: TownPost[]; categories: string[]; tags: string[]; activeCategory?: string; activeTag?: string; hoveredPostId?: string; onHover: (id?: string) => void; onCategoryPreview: (value?: string) => void; onTagPreview: (value?: string) => void; onCategory: (value?: string) => void; onTag: (value?: string) => void; onOpenArticle: (id: string) => void; onBack: () => void }) {
+function SidebarContent({ mobileOpen, panel, posts, categories, tags, activeCategory, activeTag, hoveredPostId, onHover, onCategoryPreview, onTagPreview, onCategory, onTag, onOpenArticle, onBack }: { mobileOpen: boolean; panel: SidebarPanel; posts: TownPostSummary[]; categories: string[]; tags: string[]; activeCategory?: string; activeTag?: string; hoveredPostId?: string; onHover: (id?: string) => void; onCategoryPreview: (value?: string) => void; onTagPreview: (value?: string) => void; onCategory: (value?: string) => void; onTag: (value?: string) => void; onOpenArticle: (id: string) => void; onBack: () => void }) {
   if (panel === 'categories' || panel === 'category-posts') return <div className="sidebar-panel"><SidebarPanelHeader title={panel === 'category-posts' ? activeCategory ?? '分类文章' : '分类'} eyebrow="CATEGORIES" onBack={panel === 'category-posts' ? onBack : undefined} />{panel === 'categories' ? <div className="sidebar-taxonomy">{categories.map((category) => <button key={category} className={activeCategory === category ? 'is-selected' : ''} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onCategoryPreview(category); }} onPointerLeave={(event) => { if (event.pointerType === 'mouse') onCategoryPreview(undefined); }} onClick={() => onCategory(category)}><span>{category}</span><b>{posts.filter((post) => post.category === category).length}</b></button>)}</div> : <SidebarPostList posts={posts} hoveredPostId={hoveredPostId} onHover={onHover} onOpenArticle={onOpenArticle} />}</div>;
   if (panel === 'tags' || panel === 'tag-posts') return <div className="sidebar-panel"><SidebarPanelHeader title={panel === 'tag-posts' ? `#${activeTag ?? '标签'}` : '标签'} eyebrow="TAGS" onBack={panel === 'tag-posts' ? onBack : undefined} />{panel === 'tags' ? <div className="sidebar-tags">{tags.map((tag) => <button key={tag} className={activeTag === tag ? 'is-selected' : ''} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onTagPreview(tag); }} onPointerLeave={(event) => { if (event.pointerType === 'mouse') onTagPreview(undefined); }} onClick={() => onTag(tag)}>#{tag}</button>)}</div> : <SidebarPostList posts={posts} hoveredPostId={hoveredPostId} onHover={onHover} onOpenArticle={onOpenArticle} />}</div>;
   if (panel === 'friends') return <div className="sidebar-panel"><SidebarPanelHeader title="友邻" eyebrow="FRIEND LINKS" />{friendLinks.length ? <div className="friends-list">{friendLinks.map((friend) => <a className="friend-row" href={friend.url} target="_blank" rel="noreferrer noopener" key={friend.id}><span className="friend-avatar"><img src={friend.avatar} alt="" loading="lazy" /></span><span><strong>{friend.nickname}</strong>{friend.description && <small>{friend.description}</small>}</span>{icon('external')}</a>)}</div> : <div className="sidebar-empty">还没有友邻，等一封新信。</div>}</div>;
@@ -474,21 +535,21 @@ function SidebarContent({ mobileOpen, panel, posts, categories, tags, activeCate
 }
 
 function SidebarPanelHeader({ title, eyebrow, onBack }: { title: string; eyebrow: string; onBack?: () => void }) { return <div className="sidebar-panel-header">{onBack && <button onClick={onBack} aria-label="返回面板">{icon('back')}</button>}<div><span>{eyebrow}</span><strong>{title}</strong></div></div>; }
-function SidebarPostList({ posts, hoveredPostId, onHover, onOpenArticle }: { posts: TownPost[]; hoveredPostId?: string; onHover: (id?: string) => void; onOpenArticle: (id: string) => void }) { return <div className="sidebar-posts">{posts.map((post, index) => <button key={post.id} className={`sidebar-post ${hoveredPostId === post.id ? 'is-hovered' : ''}`} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onHover(post.id); }} onPointerLeave={(event) => { if (event.pointerType === 'mouse') onHover(undefined); }} onClick={() => onOpenArticle(post.id)}><span className="sidebar-post-index">{String(index + 1).padStart(2, '0')}</span><span><strong>{post.title}</strong><small>{post.category} · {formatDate(post.date)}</small></span>{icon('chevron')}</button>)}</div>; }
+function SidebarPostList({ posts, hoveredPostId, onHover, onOpenArticle }: { posts: TownPostSummary[]; hoveredPostId?: string; onHover: (id?: string) => void; onOpenArticle: (id: string) => void }) { return <div className="sidebar-posts">{posts.map((post, index) => <a key={post.id} href={`/posts/${encodeURIComponent(post.id)}/`} className={`sidebar-post ${hoveredPostId === post.id ? 'is-hovered' : ''}`} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onHover(post.id); }} onPointerLeave={(event) => { if (event.pointerType === 'mouse') onHover(undefined); }} onClick={(event) => { event.preventDefault(); onOpenArticle(post.id); }}><span className="sidebar-post-index">{String(index + 1).padStart(2, '0')}</span><span><strong>{post.title}</strong><small>{post.category} · {formatDate(post.date)}</small></span>{icon('chevron')}</a>)}</div>; }
 
-function SearchDropdown({ results, activeIndex, onHover, onOpen, onArchive }: { results: TownPost[]; activeIndex: number; onHover: (id?: string) => void; onOpen: (id: string) => void; onArchive: () => void }) { return <div className="search-dropdown"><span className="dropdown-label">SEARCHING THE TOWN · {results.length}</span>{results.length ? results.map((post, index) => <button key={post.id} className={`search-result ${index === activeIndex ? 'is-highlighted' : ''}`} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onHover(post.id); }} onClick={() => onOpen(post.id)}><span className="search-result-index">0{index + 1}</span><span><strong>{post.title}</strong><small>{post.category} · {post.readingTime} min</small></span>{icon('arrow')}</button>) : <div className="empty-search">没有找到相关笔记。</div>}{results.length > 0 && <button className="dropdown-full" onClick={onArchive}>查看全部结果 {icon('arrow')}</button>}</div>; }
+function SearchDropdown({ results, activeIndex, onHover, onOpen, onArchive }: { results: TownPostSummary[]; activeIndex: number; onHover: (id?: string) => void; onOpen: (id: string) => void; onArchive: () => void }) { return <div className="search-dropdown"><span className="dropdown-label">SEARCHING THE TOWN · {results.length}</span>{results.length ? results.map((post, index) => <a key={post.id} href={`/posts/${encodeURIComponent(post.id)}/`} className={`search-result ${index === activeIndex ? 'is-highlighted' : ''}`} onPointerEnter={(event) => { if (event.pointerType === 'mouse') onHover(post.id); }} onClick={(event) => { event.preventDefault(); onOpen(post.id); }}><span className="search-result-index">0{index + 1}</span><span><strong>{post.title}</strong><small>{post.category} · {post.readingTime} min</small></span>{icon('arrow')}</a>) : <div className="empty-search">没有找到相关笔记。</div>}{results.length > 0 && <a className="dropdown-full" href="/posts/" onClick={(event) => { event.preventDefault(); onArchive(); }}>查看全部结果 {icon('arrow')}</a>}</div>; }
 
-function TownTooltip({ post, anchor }: { post?: TownPost; anchor?: SceneAnchor }) { if (!post || !anchor) return null; const position = anchor; return <div className="town-tooltip" style={{ left: position.x, top: position.y }}><div className="tooltip-meta"><span>{post.category}</span><span>{post.readingTime} min</span></div><strong>{post.title}</strong><p>{post.description}</p><div className="tooltip-tags">{post.tags.slice(0, 3).map((tag) => <span key={tag}>#{tag}</span>)}</div></div>; }
+function TownTooltip({ post, anchor }: { post?: TownPostSummary; anchor?: SceneAnchor }) { if (!post || !anchor) return null; const position = anchor; return <div className="town-tooltip" style={{ left: position.x, top: position.y }}><div className="tooltip-meta"><span>{post.category}</span><span>{post.readingTime} min</span></div><strong>{post.title}</strong><p>{post.description}</p><div className="tooltip-tags">{post.tags.slice(0, 3).map((tag) => <span key={tag}>#{tag}</span>)}</div></div>; }
 
-function RecentPosts({ posts, hasFilter, onOpen, onClear }: { posts: TownPost[]; hasFilter: boolean; onOpen: (id: string) => void; onClear: () => void }) { return <section className="recent-posts"><header><div><span className="section-eyebrow">RECENT NOTES</span><h2>{hasFilter ? '当前筛选下的最近笔记' : '最近写下的几件事'}</h2></div><span className="recent-count">{String(posts.length).padStart(2, '0')} / notes</span></header>{posts.length ? <div className="recent-grid">{posts.map((post) => <button key={post.id} className="recent-card" onClick={() => onOpen(post.id)}><span className="card-top"><span>{post.category}</span><span>{formatDate(post.date)}</span></span><strong>{post.title}</strong><p>{post.description}</p><span className="card-bottom">#{post.tags[0]} <i /> 阅读 {post.readingTime} 分钟 {icon('arrow')}</span></button>)}</div> : <EmptyView title="这条路暂时没有笔记" copy="换一个筛选条件，或者回到地图看看别的房子。" action="清除筛选" onAction={onClear} />}</section>; }
+function RecentPosts({ posts, hasFilter, onOpen, onClear }: { posts: TownPostSummary[]; hasFilter: boolean; onOpen: (id: string) => void; onClear: () => void }) { return <section className="recent-posts"><header><div><span className="section-eyebrow">RECENT NOTES</span><h2>{hasFilter ? '当前筛选下的最近笔记' : '最近写下的几件事'}</h2></div><span className="recent-count">{String(posts.length).padStart(2, '0')} / notes</span></header>{posts.length ? <div className="recent-grid">{posts.map((post) => <a key={post.id} className="recent-card" href={`/posts/${encodeURIComponent(post.id)}/`} onClick={(event) => { event.preventDefault(); onOpen(post.id); }}><span className="card-top"><span>{post.category}</span><span>{formatDate(post.date)}</span></span><strong>{post.title}</strong><p>{post.description}</p><span className="card-bottom">#{post.tags[0]} <i /> 阅读 {post.readingTime} 分钟 {icon('arrow')}</span></a>)}</div> : <EmptyView title="这条路暂时没有笔记" copy="换一个筛选条件，或者回到地图看看别的房子。" action="清除筛选" onAction={onClear} />}</section>; }
 
 function ArchiveHeading({ postCount }: { postCount: number }) {
   return <header className="archive-heading archive-shell-heading"><div><span className="section-eyebrow">THE ARCHIVE · {String(postCount).padStart(2, '0')} NOTES</span><h1>文章档案</h1></div></header>;
 }
 
-function ArchiveView({ posts, onOpen }: { posts: TownPost[]; onOpen: (id: string) => void }) {
+function ArchiveView({ posts, onOpen }: { posts: TownPostSummary[]; onOpen: (id: string) => void }) {
   return <section className="archive-page">
-    <div className="archive-list" aria-live="polite">{posts.map((post, index) => <button key={post.id} className={`archive-row ${post.cover ? 'has-cover' : ''}`} onClick={() => onOpen(post.id)}>{post.cover ? <span className="archive-cover"><img src={post.cover} alt="" loading="lazy" /></span> : <span className="archive-index">{String(index + 1).padStart(2, '0')}</span>}<span className="archive-copy"><strong>{post.title}</strong><small>{post.description}</small><em>{post.category} · {post.tags.slice(0, 2).map((tag) => `#${tag}`).join('  ')}</em></span><time>{formatDate(post.date)}</time>{icon('arrow')}</button>)}</div>
+    <div className="archive-list" aria-live="polite">{posts.map((post, index) => <a key={post.id} href={`/posts/${encodeURIComponent(post.id)}/`} className={`archive-row ${post.cover ? 'has-cover' : ''}`} onClick={(event) => { event.preventDefault(); onOpen(post.id); }}>{post.cover ? <span className="archive-cover"><img src={post.cover} alt="" loading="lazy" /></span> : <span className="archive-index">{String(index + 1).padStart(2, '0')}</span>}<span className="archive-copy"><strong>{post.title}</strong><small>{post.description}</small><em>{post.category} · {post.tags.slice(0, 2).map((tag) => `#${tag}`).join('  ')}</em></span><time>{formatDate(post.date)}</time>{icon('arrow')}</a>)}</div>
     {!posts.length && <div className="archive-empty"><h2>这里暂时没有文章</h2><p>再次点击当前选项即可取消筛选，或者选择上方的其他分类与标签。</p></div>}
   </section>;
 }
@@ -499,10 +560,10 @@ const ArticleSectionContent = memo(function ArticleSectionContent({ html }: { ht
   return <div className="article-section-content" dangerouslySetInnerHTML={{ __html: html }} />;
 });
 
-type ArticleHeading = NonNullable<TownPost['sections'][number]['heading']>;
+type ArticleHeading = NonNullable<ArticleSection['heading']>;
 
-function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation, colorMode }: { colorMode: ColorMode; navigation: TownNavigation; post: TownPost; layout: TownLayout; seriesPosts: TownPost[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
-  const headings = useMemo(() => post.sections.flatMap((section) => section.heading ? [section.heading] : []), [post.sections]);
+function ArticleView({ post, sections, layout, seriesPosts, scrollRoot, onOpen, navigation, colorMode }: { colorMode: ColorMode; navigation: TownNavigation; post: TownPostSummary; sections: ArticleSection[]; layout: TownLayout; seriesPosts: TownPostSummary[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
+  const headings = useMemo(() => sections.flatMap((section) => section.heading ? [section.heading] : []), [sections]);
   const townMap = useMemo(() => createTownMapModel(layout, post.id), [layout, post.id]);
   const seriesIndex = seriesPosts.findIndex((item) => item.id === post.id);
   const previousSeriesPost = seriesIndex > 0 ? seriesPosts[seriesIndex - 1] : undefined;
@@ -553,7 +614,7 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
       const top = root.scrollTop + target.getBoundingClientRect().top - root.getBoundingClientRect().top - 136;
       root.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
       const body = article.querySelector<HTMLElement>('.article-body');
-      if (body?.contains(target)) clearArrival = showReferenceArrival(target, body, post.sections);
+      if (body?.contains(target)) clearArrival = showReferenceArrival(target, body, sections);
     });
     return () => { window.cancelAnimationFrame(frame); clearArrival?.(); };
   }, [navigation, post.id, scrollRoot]);
@@ -675,7 +736,7 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
 
   const hiddenSections = useMemo(() => {
     const collapsedLevels: number[] = [];
-    return post.sections.map((section) => {
+    return sections.map((section) => {
       const level = section.heading?.level;
       if (level) {
         while (collapsedLevels.length && collapsedLevels[collapsedLevels.length - 1] >= level) collapsedLevels.pop();
@@ -684,24 +745,24 @@ function ArticleView({ post, layout, seriesPosts, scrollRoot, onOpen, navigation
       if (section.heading && collapsed[section.heading.id]) collapsedLevels.push(section.heading.level);
       return hidden;
     });
-  }, [collapsed, post.sections]);
+  }, [collapsed, sections]);
 
   // Keep the comment anchor available during lazy loading for sign-in return links.
-  return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-body">{post.sections.map((section, index) => {
+  return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-body">{sections.map((section, index) => {
     const ancestorHidden = hiddenSections[index];
     const ownCollapsed = section.heading ? Boolean(collapsed[section.heading.id]) : false;
     const Heading = section.heading ? ARTICLE_HEADING_TAGS[Math.min(section.heading.level, 6)] : undefined;
     return <section className={`article-section ${ancestorHidden ? 'is-hidden' : ''}`} key={section.heading?.id ?? `preamble-${index}`}>{section.heading && Heading && <div className={`article-heading-row level-${section.heading.level}`}><Heading id={section.heading.id} {...(section.heading.html ? { dangerouslySetInnerHTML: { __html: section.heading.html } } : { children: section.heading.text })} /><span className="heading-level-marker" aria-hidden="true">{'#'.repeat(section.heading.level)}</span><button className="heading-toggle" aria-label={ownCollapsed ? `展开 ${section.heading.text}` : `收起 ${section.heading.text}`} aria-expanded={!ownCollapsed} onClick={() => setCollapsed((state) => ({ ...state, [section.heading!.id]: !state[section.heading!.id] }))} /></div>}{!ancestorHidden && !ownCollapsed && section.html && <ArticleSectionContent html={section.html} />}</section>;
-  })}</div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <button onClick={() => onOpen(previousSeriesPost.id)}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></button> : <span />}{nextSeriesPost ? <button onClick={() => onOpen(nextSeriesPost.id)}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></button> : <span />}</div></div>}{commentConfig.enabled && <Suspense fallback={<section id="article-comments" className="article-comments" aria-label="正在加载评论" />}><ArticleComments key={post.id} postId={post.id} title={post.title} colorMode={colorMode} scrollRoot={scrollRoot} /></Suspense>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} map={townMap} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
+  })}</div>{(previousSeriesPost || nextSeriesPost) && <div className="related-posts series-neighbors"><span>继续阅读 · {post.series}</span><div className="series-neighbor-grid">{previousSeriesPost ? <a href={`/posts/${encodeURIComponent(previousSeriesPost.id)}/`} onClick={(event) => { event.preventDefault(); onOpen(previousSeriesPost.id); }}><small>上一篇</small><strong>{previousSeriesPost.title}</strong></a> : <span />}{nextSeriesPost ? <a href={`/posts/${encodeURIComponent(nextSeriesPost.id)}/`} onClick={(event) => { event.preventDefault(); onOpen(nextSeriesPost.id); }}><small>下一篇</small><strong>{nextSeriesPost.title}</strong></a> : <span />}</div></div>}{commentConfig.enabled && <Suspense fallback={<section id="article-comments" className="article-comments" aria-label="正在加载评论" />}><ArticleComments key={post.id} postId={post.id} title={post.title} colorMode={colorMode} scrollRoot={scrollRoot} /></Suspense>}</article><aside className="article-aside"><span className="aside-eyebrow">ON THE MAP</span><MiniTownMap post={post} map={townMap} />{headings.length > 0 && <ArticleContents headings={headings} activeHeadingId={activeHeadingId} readingProgress={readingProgress} />}</aside></div></section>;
 }
 
-function SeriesDrawer({ posts, selectedPostId, onOpenArticle }: { posts: TownPost[]; selectedPostId: string; onOpenArticle: (id: string) => void }) {
+function SeriesDrawer({ posts, selectedPostId, onOpenArticle }: { posts: TownPostSummary[]; selectedPostId: string; onOpenArticle: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   return <div className={`series-drawer ${open ? 'is-open' : ''}`}>
     <button className="series-drawer-toggle" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
       <span><small>文章系列</small><strong>此篇文章属于「{posts[0]?.series}」</strong></span><span className="series-drawer-count">{posts.length} 篇 {icon('chevron')}</span>
     </button>
-    <div className="series-drawer-list"><div>{posts.map((item, index) => <button key={item.id} className={item.id === selectedPostId ? 'is-current' : ''} onClick={() => onOpenArticle(item.id)}><b>{String(index + 1).padStart(2, '0')}</b><span>{item.title}</span>{item.id === selectedPostId && <em>正在阅读</em>}</button>)}</div></div>
+    <div className="series-drawer-list"><div>{posts.map((item, index) => <a key={item.id} href={`/posts/${encodeURIComponent(item.id)}/`} className={item.id === selectedPostId ? 'is-current' : ''} onClick={(event) => { event.preventDefault(); onOpenArticle(item.id); }}><b>{String(index + 1).padStart(2, '0')}</b><span>{item.title}</span>{item.id === selectedPostId && <em>正在阅读</em>}</a>)}</div></div>
   </div>;
 }
 
@@ -760,7 +821,7 @@ function ArticleContents({ headings, activeHeadingId, readingProgress }: Article
 }
 
 
-function MiniTownMap({ post, map }: { post: TownPost; map: TownMapModel }) {
+function MiniTownMap({ post, map }: { post: TownPostSummary; map: TownMapModel }) {
   const path = (points: { x: number; z: number }[]) => points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.z}`).join(' ');
   const polygonFor = (building: typeof map.buildings[number]) => building.points?.map((point) => `${point.x},${point.z}`).join(' ') ?? '';
   return <div className="article-location" aria-label={`文章建筑在小镇中的位置：${post.title}`}>
@@ -781,3 +842,11 @@ function MiniTownMap({ post, map }: { post: TownPost; map: TownMapModel }) {
 }
 
 function EmptyView({ title, copy, action, onAction }: { title: string; copy: string; action: string; onAction: () => void }) { return <div className="empty-view"><h2>{title}</h2><p>{copy}</p><button onClick={onAction}>{action} {icon('arrow')}</button></div>; }
+
+function ArticleLoading({ post, error, onRetry }: { post: TownPostSummary; error: boolean; onRetry: () => void }) {
+  return <div className="empty-view" role="status" aria-live="polite">
+    <h2>{error ? '文章暂时无法载入' : `正在打开「${post.title}」`}</h2>
+    <p>{error ? '正文请求失败，请检查网络后重试。' : '正在载入正文…'}</p>
+    {error && <button onClick={onRetry}>重新载入 {icon('arrow')}</button>}
+  </div>;
+}

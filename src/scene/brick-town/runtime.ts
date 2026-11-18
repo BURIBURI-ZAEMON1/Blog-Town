@@ -162,7 +162,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     canvas.dataset.contactShadows='on';requestDraw();
   }).catch(()=>{ /* Keep the base scene usable if this optional chunk fails. */ });
   const postMap=new Map(posts.map(p=>[p.id,p]));
-  const postSearchText=new Map(posts.map(p=>[p.id,[p.title,p.description,p.category,...p.tags,p.series??'',p.searchText].join(' ').toLowerCase()]));
+  const postSearchText=new Map(posts.map(p=>[p.id,[p.title,p.description,p.category,...p.tags,p.series??''].join(' ').toLowerCase()]));
   const houseByPostId=new Map<string,ReturnType<typeof buildHouse>>();
   for(const house of houses)for(const id of house.ids)houseByPostId.set(id,house);
   let articleMeshes=[...houseMeshes,...seasons.articleMeshes];

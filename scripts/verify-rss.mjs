@@ -93,7 +93,7 @@ let lastDate = Infinity;
 for (const item of items) {
   const link = DomUtils.textContent(find(item, 'link')[0]);
   assert.equal(new URL(link).origin, new URL(site).origin);
-  assert(existsSync(`dist${decodeURI(new URL(link).pathname)}index.html`));
+  assert(existsSync(`dist${decodeURIComponent(new URL(link).pathname)}index.html`));
   links.push(link);
   assert.equal(DomUtils.textContent(find(item, 'guid')[0]), link, 'stable permalink GUID');
   const date = Date.parse(DomUtils.textContent(find(item, 'pubDate')[0]));
