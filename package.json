@@ -32,7 +32,8 @@
     "verify:layout-cache": "node scripts/verify-town-layout-cache.mjs",
     "verify:assets": "node scripts/verify-town-assets.mjs",
     "verify:runtime": "node scripts/verify-town-runtime.mjs",
-    "verify:rss": "node scripts/verify-rss.mjs"
+    "verify:rss": "node scripts/verify-rss.mjs",
+    "verify:search-ime": "node scripts/verify-search-ime.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.4",
