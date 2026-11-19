@@ -60,6 +60,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   }
   engine.onContextRestoredObservable.add(requestDraw);
   const scene=new Scene(engine);
+  // Our throttled pointer handlers own the cursor; Babylon resets it on every move.
+  scene.doNotHandleCursors=true;
   // Picking is handled explicitly below, with throttling and gesture detection.
   scene.skipPointerMovePicking=true;scene.skipPointerDownPicking=true;scene.skipPointerUpPicking=true;
   scene.blockMaterialDirtyMechanism=true;
