@@ -171,6 +171,57 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 
 .article-cover { aspect-ratio: 16 / 8.8; margin: 28px 0 8px; overflow: hidden; border: 1px solid var(--line-strong); background: var(--paper-2); }
 .article-cover img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* In-app About: a warm card layout that keeps the town sidebar mounted. */
+.about-inapp { display: grid; grid-template-columns: minmax(0, 700px) 200px; justify-content: center; gap: 56px; max-width: 1060px; margin: 0 auto; padding: 46px 32px 84px; }
+.about-inapp-main { min-width: 0; max-width: 760px; }
+.about-inapp-head { margin-bottom: 26px; }
+.about-inapp-eyebrow { display: block; margin-bottom: 10px; color: var(--gold); font-family: var(--mono); font-size: 9px; letter-spacing: .16em; }
+.about-inapp-head h1 { margin: 0; font-family: var(--display); font-size: clamp(42px, 5.6vw, 72px); line-height: .95; letter-spacing: -.035em; }
+.about-inapp-headline { margin: 14px 0 0; color: var(--ink); font-family: var(--serif); font-size: 16px; font-weight: 700; }
+.about-inapp-hero { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 26px; align-items: center; padding: 24px; border: 1px solid var(--line); border-radius: 22px; background: linear-gradient(140deg, color-mix(in srgb, var(--paper-3) 96%, var(--gold)), var(--paper-3)); box-shadow: 0 18px 46px color-mix(in srgb, var(--ink) 7%, transparent); }
+.about-inapp-portrait { position: relative; }
+.about-inapp-portrait img { display: block; width: 148px; height: 148px; object-fit: cover; border: 1px solid var(--line); border-radius: 20px; }
+.about-inapp-badge { position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); padding: 4px 10px; border-radius: 999px; background: var(--ink); color: var(--paper); font-family: var(--mono); font-size: 8px; letter-spacing: .16em; }
+.about-inapp-intro > p { margin: 0 0 16px; color: var(--muted); font-family: var(--serif); font-size: 13px; line-height: 1.85; }
+.about-inapp-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.about-inapp-stats > div { display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; min-width: 0; padding: 10px 11px; border: 1px solid rgba(23, 32, 51, .10); border-radius: 12px; background: var(--paper-2, #f8fafc); }
+.about-inapp-stats strong { display: block; font-family: var(--display); font-size: 20px; line-height: 1.15; letter-spacing: -.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.about-inapp-stats span { color: var(--muted); font-family: var(--mono); font-size: 10px; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mode-night .about-inapp-stats > div { border-color: rgba(248, 250, 252, .10); background: #111c2f; }
+.about-inapp-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.about-inapp-links a { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; text-decoration: none; }
+.about-inapp-links a:hover { border-color: var(--gold); color: var(--gold); }
+.about-inapp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+.about-inapp-card { position: relative; overflow: hidden; padding: 24px 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--paper-3); }
+.about-inapp-card-index { display: block; margin-bottom: 12px; color: color-mix(in srgb, var(--gold) 82%, transparent); font-family: var(--mono); font-size: 9px; letter-spacing: .14em; }
+.about-inapp-card h2 { margin: 0 0 12px; font-family: var(--display); font-size: 23px; letter-spacing: -.03em; }
+.about-inapp-card p { margin: 0 0 10px; color: var(--muted); font-family: var(--serif); font-size: 12.5px; line-height: 1.85; }
+.about-inapp-card p:last-child { margin-bottom: 0; }
+.about-inapp-card.is-accent { background: linear-gradient(150deg, color-mix(in srgb, var(--gold) 15%, var(--paper-3)), var(--paper-3)); }
+.about-inapp-card-ring { position: absolute; right: -42px; bottom: -50px; width: 168px; height: 168px; border: 16px solid color-mix(in srgb, var(--gold) 16%, transparent); border-radius: 50%; pointer-events: none; }
+.about-inapp-card .about-links { margin-top: 14px; }
+.about-inapp-comments { margin-top: 26px; }
+.about-inapp-aside { position: sticky; top: 86px; align-self: start; padding-top: 6px; }
+.about-inapp-aside .about-contents { margin-top: 16px; }
+.about-inapp-aside .about-contents .article-contents-viewport { display: grid; gap: 8px; }
+.about-inapp-aside .about-contents a { position: relative; padding: 0 0 0 12px; color: #77736a; font-family: var(--serif); font-size: 10px; line-height: 1.5; text-decoration: none; }
+.about-inapp-aside .about-contents a::before { content: ''; position: absolute; left: 0; top: .55em; width: 4px; height: 4px; border-radius: 50%; background: var(--sage); }
+.about-inapp-aside .about-contents a:hover, .about-inapp-aside .about-contents a.is-active { color: var(--ink); }
+.about-inapp-aside .about-contents a.is-active { font-weight: 600; }
+.mode-night .about-inapp-hero { background: linear-gradient(140deg, color-mix(in srgb, var(--paper-3) 94%, var(--gold)), var(--paper-3)); }
+
+@media (max-width: 1100px) {
+  .about-inapp { grid-template-columns: minmax(0, 760px); gap: 0; padding: 40px 32px 72px; }
+  .about-inapp-aside { display: none; }
+}
+
+@media (max-width: 720px) {
+  .about-inapp { padding: 28px 16px 56px; }
+  .about-inapp-hero { grid-template-columns: 1fr; padding: 18px; text-align: left; }
+  .about-inapp-portrait img { width: 96px; height: 96px; }
+  .about-inapp-grid { grid-template-columns: 1fr; }
+}
 .article-section.is-hidden { display: none; }
 .article-section-content { color: #575850; font-family: var(--serif); font-size: 15px; line-height: 2.05; overflow-wrap: anywhere; }
 .article-section-content > :first-child { margin-top: 0; }
@@ -840,6 +891,32 @@ body { font-family: var(--sans); }
 .season-control select { appearance: none; min-height: 30px; width: 68px; padding: 0 12px 0 0; border: 0; outline: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 .season-control select:focus, .season-control select:focus-visible { outline: 0; box-shadow: none; }
 .season-control option { background: var(--paper); color: var(--ink); }
+
+.profile-about-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--sage);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .04em;
+  text-decoration: none;
+}
+
+.profile-about-link:hover {
+  color: var(--gold);
+}
+
+.profile-about-link .icon {
+  width: 14px;
+}
+
+.town-feature-tooltip .tooltip-meta {
+  color: var(--gold);
+}
 .mode-night .season-control { color: #c3d0e2; }
 .mode-night .season-control > .icon:first-of-type { color: #edc78b; }
 @media (max-width: 720px) {
@@ -1647,3 +1724,191 @@ a.touch-preview-read,
     margin-top: 6px;
   }
 }
+
+.topnav-classic {
+  gap: 5px;
+}
+.topnav-classic .icon {
+  width: 11px;
+  height: 11px;
+  color: var(--muted);
+}
+.sidebar-classic-link {
+  color: #b45a22;
+  font-family: var(--sans);
+  font-size: 10px;
+  font-weight: 500;
+  font-style: oblique 8deg;
+  letter-spacing: .04em;
+}
+.sidebar-classic-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- Diary: a notice board pinned to the town wall ---- */
+.diary-page { padding: 58px 42px 90px; }
+.diary-head { max-width: 760px; margin: 0 auto 34px; }
+.diary-head h1 { margin: 10px 0 12px; font-family: var(--display); font-size: clamp(38px, 5vw, 62px); letter-spacing: -.045em; line-height: 1.05; }
+.diary-head p { margin: 0; max-width: 520px; color: var(--muted); font-family: var(--serif); font-size: 13px; line-height: 1.85; }
+.diary-layout { display: grid; grid-template-columns: 150px minmax(0, 900px); gap: 44px; max-width: 1180px; margin: 0 auto; align-items: start; }
+.diary-months { position: sticky; top: 24px; display: grid; gap: 2px; padding-top: 4px; }
+.diary-months a { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 8px 4px; border-bottom: 1px solid rgba(23, 32, 51, .10); color: var(--muted); font-family: var(--mono); font-size: 9px; text-decoration: none; }
+.diary-months a:hover { color: var(--ink); border-bottom-color: var(--blue); }
+.diary-months b { color: color-mix(in srgb, var(--gold) 80%, transparent); font-weight: 400; }
+.diary-timeline { display: grid; gap: 34px; }
+.diary-month { scroll-margin-top: 110px; }
+.diary-month > h2 { margin: 0 0 16px; color: var(--muted); font-family: var(--mono); font-size: 9px; font-weight: 400; letter-spacing: .16em; text-transform: uppercase; }
+.diary-card { position: relative; margin-bottom: 18px; padding: 26px 24px 22px; border: 1px solid rgba(23, 32, 51, .12); border-radius: 6px; background: var(--paper-2, #f8fafc); box-shadow: 5px 7px 0 rgba(23, 32, 51, .05); }
+.diary-tape { position: absolute; top: -10px; left: 24px; width: 76px; height: 21px; background: rgba(37, 99, 235, .16); border: 1px solid rgba(37, 99, 235, .22); transform: rotate(-2.2deg); }
+.diary-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-bottom: 11px; color: var(--muted-2); font-family: var(--mono); font-size: 8px; letter-spacing: .06em; }
+.diary-meta em { padding: 2px 7px; border-radius: 999px; background: rgba(37, 99, 235, .10); color: var(--blue); font-style: normal; }
+.diary-card > p { margin: 0; font-family: var(--serif); font-size: 13.5px; line-height: 1.95; }
+.diary-images { display: grid; gap: 8px; margin-top: 16px; }
+.diary-images.count-1 { grid-template-columns: 1fr; }
+.diary-images.count-2 { grid-template-columns: 1fr 1fr; }
+.diary-images.count-3 { grid-template-columns: 1fr 1fr; }
+.diary-images a { display: block; overflow: hidden; border: 1px solid rgba(23, 32, 51, .10); border-radius: 4px; background: var(--paper-2, #f8fafc); }
+.diary-images img { display: block; width: 100%; height: auto; max-height: 460px; object-fit: contain; background: var(--paper-2, #f8fafc); transition: transform .35s ease; }
+.diary-images a:hover img { transform: scale(1.02); }
+
+/* ---- Friends: the hamlet list keeps its selection while the camera travels ---- */
+.friend-row { display: grid; grid-template-columns: minmax(0, 1fr) 26px; align-items: center; gap: 4px; padding: 0; border-bottom: 1px solid rgba(23, 32, 51, .08); }
+.friend-row:hover { background: rgba(255,255,255,.46); }
+.friend-row.is-selected { background: rgba(37, 99, 235, .08); box-shadow: inset 2px 0 0 var(--blue); }
+.friend-pick { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 8px; align-items: center; min-width: 0; padding: 7px 4px 7px 7px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+/* The copy column lives inside the button, so the old .friend-row selector no
+   longer applied and long blurbs spilled out of the row. */
+.friend-pick > span:nth-child(2) { display: grid; gap: 2px; min-width: 0; }
+.friend-pick strong, .friend-pick small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-pick strong { font-size: 10px; }
+.friend-visit { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 3px; color: #899d8c; }
+.friend-visit:hover { background: rgba(255,255,255,.6); color: var(--ink); }
+.friend-visit .icon { width: 12px; }
+.friend-row.is-selected .friend-visit { color: var(--blue); }
+
+/* ---- Friend label projected above the chosen hut ---- */
+.town-friend-tag { width: 186px; padding: 12px 13px; pointer-events: auto; cursor: pointer; }
+.town-friend-tag:hover { border-color: var(--blue); }
+.town-friend-tag .friend-tag-visit { display: inline-flex; align-items: center; gap: 4px; margin-top: 2px; padding: 5px 9px; border: 1px solid rgba(37, 99, 235, .3); border-radius: 999px; color: var(--blue); font-family: var(--mono); font-size: 9px; text-decoration: none; }
+.town-friend-tag .friend-tag-visit:hover { background: rgba(37, 99, 235, .1); }
+.friend-tag-head { display: flex; align-items: center; gap: 9px; }
+.friend-tag-avatar { display: grid; place-items: center; width: 26px; height: 26px; overflow: hidden; border-radius: 50%; background: #b8c7b6; }
+.friend-tag-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.town-friend-tag strong { font-family: var(--serif); font-size: 13px; font-weight: 600; }
+.town-friend-tag p { margin: 8px 0 10px; color: var(--muted); font-family: var(--serif); font-size: 10.5px; line-height: 1.6; }
+.town-friend-tag a { display: inline-flex; align-items: center; gap: 4px; color: var(--blue); font-family: var(--mono); font-size: 9px; text-decoration: none; }
+.town-friend-tag a .icon { width: 11px; }
+
+/* ---- Diary board label projected above a notice board ---- */
+.town-diary-tag { width: 246px; padding: 12px 13px; }
+.town-diary-tag .tooltip-meta { margin-bottom: 6px; }
+.town-diary-tag strong { display: block; margin: 0 0 8px; color: var(--ink); font-family: var(--serif); font-size: 11.5px; font-weight: 500; line-height: 1.7; }
+.town-diary-tag a { display: inline-flex; align-items: center; gap: 4px; color: var(--blue); font-family: var(--mono); font-size: 9px; text-decoration: none; }
+.town-diary-tag a .icon { width: 11px; }
+
+/* ---- Diary district: highlight the entry a board links to ---- */
+.diary-card:target { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37, 99, 235, .18), 5px 7px 0 rgba(23, 32, 51, .05); }
+
+/* ---- Diary layout switch: two segmented choices in the top bar ---- */
+.diary-mode-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid rgba(23, 32, 51, .12); border-radius: 999px; background: rgba(255, 255, 255, .6); flex-shrink: 0; }
+.diary-mode-switch button { padding: 4px 9px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-family: var(--mono); font-size: 8px; letter-spacing: .06em; cursor: pointer; transition: .18s ease; }
+.diary-mode-switch button:hover { color: var(--ink); }
+.diary-mode-switch button.is-active { background: var(--blue); color: #fff; }
+.mode-night .diary-mode-switch { border-color: rgba(248, 250, 252, .16); background: rgba(17, 28, 47, .7); }
+.mode-night .diary-mode-switch button { color: #94a3b8; }
+.mode-night .diary-mode-switch button.is-active { background: #2563eb; color: #fff; }
+@media (max-width: 720px) {
+  .diary-mode-switch { padding: 1px; }
+  .diary-mode-switch button { padding: 3px 7px; }
+}
+
+/* ---- Diary reading card: a floating note over the town ---- */
+.diary-reading-card { position: fixed; z-index: 60; width: min(420px, calc(100vw - 32px)); transform: translate(-50%, -100%); padding: 18px 20px 16px; border: 1px solid rgba(23, 32, 51, .14); border-radius: 14px; background: var(--paper-3); box-shadow: 0 18px 44px rgba(23, 32, 51, .18), 0 2px 0 rgba(23, 32, 51, .04); }
+.diary-reading-card.is-below { transform: translate(-50%, 0); }
+.diary-reading-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.diary-reading-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted-2); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; }
+.diary-reading-meta em { padding: 2px 7px; border-radius: 999px; background: rgba(37, 99, 235, .1); color: var(--blue); font-style: normal; }
+.diary-reading-close { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid rgba(23, 32, 51, .1); border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.diary-reading-close:hover { color: var(--ink); border-color: var(--blue); }
+.diary-reading-close .icon { width: 13px; }
+.diary-reading-text { margin: 0 0 14px; font-family: var(--serif); font-size: 13.5px; line-height: 1.9; }
+.diary-reading-images { display: grid; gap: 8px; margin-bottom: 14px; }
+.diary-reading-images img { display: block; width: 100%; height: auto; max-height: 260px; object-fit: cover; border-radius: 8px; }
+.diary-reading-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid rgba(23, 32, 51, .1); }
+.diary-reading-actions button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 1px solid rgba(23, 32, 51, .12); border-radius: 999px; background: transparent; color: var(--muted); font-family: var(--mono); font-size: 9px; cursor: pointer; }
+.diary-reading-actions button:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.diary-reading-actions button:disabled { opacity: .4; cursor: default; }
+.diary-reading-actions .icon { width: 12px; }
+.diary-reading-count { color: var(--muted-2); font-family: var(--mono); font-size: 9px; }
+.diary-reading-open { display: inline-flex; align-items: center; gap: 5px; margin-top: 12px; color: var(--blue); font-family: var(--mono); font-size: 9px; text-decoration: none; }
+.diary-reading-open .icon { width: 12px; }
+.mode-night .diary-reading-card { background: #111c2f; border-color: rgba(248, 250, 252, .12); box-shadow: 0 18px 44px rgba(0, 0, 0, .5); }
+.mode-night .diary-reading-actions { border-top-color: rgba(248, 250, 252, .1); }
+@media (max-width: 720px) {
+  .diary-reading-card { top: 74px; width: calc(100vw - 24px); padding: 15px 16px 14px; }
+}
+
+/* ---- Sidebar ledger: three site figures instead of duplicate links ---- */
+.sidebar-ledger { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+.sidebar-ledger > div { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.sidebar-ledger span { color: var(--muted-2); font-family: var(--mono); font-size: 10px; letter-spacing: .02em; white-space: nowrap; }
+/* Fixed tabular figures keep the three columns optically even even though the
+   values have different widths (1.2k vs 136 vs 11.2 万). */
+.sidebar-ledger strong { color: var(--ink); font-family: var(--mono); font-size: 14px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mode-night .sidebar-ledger span { color: #94a3b8; }
+.mode-night .sidebar-ledger strong { color: #f8fafc; }
+
+/* Diary layout switch now lives on the diary page header. */
+.diary-mode-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.diary-mode-label { color: var(--muted-2); font-family: var(--mono); font-size: 9px; letter-spacing: .08em; }
+
+
+/* Right-edge flip: keep the card inside the viewport instead of clipping it. */
+.town-tooltip.is-flipped { transform: translate(calc(-100% - 15px), -100%); }
+.town-tooltip.is-flipped::before { right: auto; left: 100%; border-left: 0; border-right: 3px solid color-mix(in srgb, var(--ink) 68%, var(--gold)); transform: rotate(45deg); }
+.mode-night .town-tooltip.is-flipped::before { border-right-color: color-mix(in srgb, #efe2c6 52%, #b49054); }
+@media (max-width: 720px) {
+  .town-tooltip.is-flipped { transform: translate(-50%, -108%); }
+}
+
+/* ---- Article read count ---- */
+.article-view-count { color: var(--blue); }
+
+/* ---- About stat grid grows to four figures ---- */
+
+
+.town-stat-strip { max-width: 1060px; margin: 0 auto; padding: 34px 42px 0; }
+.town-stat-strip-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.town-stat-strip-head button { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: var(--blue); font-family: var(--mono); font-size: 9px; letter-spacing: .06em; cursor: pointer; }
+.town-stat-strip-head button .icon { width: 12px; }
+.town-stat-strip-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.town-stat-strip-cell { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; min-width: 0; padding: 12px 13px; border: 1px solid rgba(23, 32, 51, .10); border-radius: 12px; background: var(--paper-2, #f8fafc); }
+.town-stat-strip-cell strong { font-family: var(--display); font-size: 22px; line-height: 1.1; letter-spacing: -.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.town-stat-strip-cell span { color: var(--muted-2); font-family: var(--mono); font-size: 8px; letter-spacing: .1em; }
+.mode-night .town-stat-strip-cell { border-color: rgba(248, 250, 252, .10); background: #111c2f; }
+
+@media (max-width: 900px) {
+  .town-stat-strip { padding: 28px 20px 0; }
+  .town-stat-strip-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .diary-page { padding: 40px 20px 70px; }
+  .diary-layout { grid-template-columns: 1fr; gap: 24px; }
+  .diary-months { position: static; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; }
+  .diary-months a { flex: 0 0 auto; gap: 6px; padding: 6px 10px; border: 1px solid rgba(23, 32, 51, .10); border-radius: 999px; }
+  .about-inapp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .town-stat-strip { padding: 24px 16px 0; }
+  .town-stat-strip-head { flex-wrap: wrap; }
+  .diary-page { padding: 30px 16px 60px; }
+  .diary-card { padding: 18px 16px 16px; }
+  .diary-images.count-2, .diary-images.count-3 { grid-template-columns: 1fr; }
+}
+.mode-night .friend-row { border-bottom-color: rgba(248, 250, 252, .08); }.mode-night .friend-row:hover { background: rgba(255,255,255,.08); }.mode-night .friend-row.is-selected { background: rgba(96, 165, 250, .14); box-shadow: inset 2px 0 0 var(--blue); }
+.mode-night .friend-visit:hover { background: rgba(255,255,255,.1); }
+.mode-night .diary-card { background: #111c2f; border-color: rgba(248, 250, 252, .10); box-shadow: 5px 7px 0 rgba(0, 0, 0, .28); }.mode-night .diary-tape { background: rgba(96, 165, 250, .20); border-color: rgba(96, 165, 250, .26); }.mode-night .diary-months a { border-bottom-color: rgba(248, 250, 252, .10); }.mode-night .diary-images a { border-color: rgba(248, 250, 252, .10); }
+
+
+
+

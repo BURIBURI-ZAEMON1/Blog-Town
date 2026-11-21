@@ -22,6 +22,14 @@ interface SiteConfig {
   logo: string;
   language: string;
   townSeed: string;
+  /**
+   * How short notes appear in the town.
+   * - `district`: one notice board per note, laid out as its own block.
+   * - `single`: one civic board beside the windmill that opens the diary page.
+   */
+  diaryLayout: 'district' | 'single';
+  /** First day the blog went live, used by the running-days figure. */
+  launchDate: string;
   profile: {
     name: string;
     avatar: string;
@@ -41,6 +49,8 @@ export const siteConfig: SiteConfig = {
   logo: '/assets/profile/logo.svg', // 必填：网站 Logo；请替换 public/assets/profile/logo.svg，或填写 public 下其他图片的根路径。
   language: 'zh-CN', // 必填：HTML lang 值，例如 zh-CN、en-US。
   townSeed: 'town-blog-framework-v1', // 可选：小镇布局随机种子；修改后文章建筑的位置与外观会重新排列。
+  diaryLayout: 'district', // 可选：短日记默认布局；访客可在顶栏切换，选择会记住。
+  launchDate: '2026-01-01', // 可选：建站日期；用于“已运行 N 天”的统计。
   profile: {
     name: '请填写作者名称', // 必填：个人资料区显示的作者名，也会写入页面 author 元信息。
     avatar: '/assets/profile/avatar.svg', // 必填：作者头像；请替换 public/assets/profile/avatar.svg，或填写其他根路径。
@@ -112,4 +122,7 @@ export const siteConfig: SiteConfig = {
 export const friendLinks: FriendLink[] = [
   // 可选：友链。每位友邻单独占一行；启用时删除行首 //，并把头像或站点 Logo 放入 public/assets/friends/。
   // { id: 'friend-id', nickname: '友邻名称', avatar: '/assets/friends/friend-id.png', url: 'https://friend.example.com/', description: '可选的友邻简介' },
+  { id: 'friend-a', nickname: '友邻 A', avatar: '/assets/profile/logo.svg', url: 'https://example.com/', description: '示例友邻一' },
+  { id: 'friend-b', nickname: '友邻 B', avatar: '/assets/profile/logo.svg', url: 'https://example.com/', description: '示例友邻二' },
+  { id: 'friend-c', nickname: '友邻 C', avatar: '/assets/profile/logo.svg', url: 'https://example.com/', description: '示例友邻三' },
 ];

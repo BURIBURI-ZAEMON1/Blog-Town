@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
-export type MainSurface = 'town' | 'article' | 'archive';
+export type MainSurface = 'town' | 'article' | 'archive' | 'about' | 'diary';
 export interface ReadingSnapshot {
   scrollTop: number;
   collapsed: string[];
@@ -42,6 +42,8 @@ export function useTownNavigation(posts: { id: string }[], root: RefObject<HTMLE
   }, [root]);
   const readRoute = useCallback((url: URL) => {
     const parts = url.pathname.split('/').filter(Boolean);
+    if (parts.length === 1 && parts[0] === 'about') return { surface: 'about' as const };
+    if (parts.length === 1 && parts[0] === 'diary') return { surface: 'diary' as const };
     if (parts[0] === 'posts') {
       if (!parts[1]) return { surface: 'archive' as const };
       let postId: string;
@@ -112,7 +114,12 @@ export function useTownNavigation(posts: { id: string }[], root: RefObject<HTMLE
   }, [navigation, root]);
 
   const navigate = (surface: MainSurface, postId?: string) => {
-    const path = surface === 'article' && postId ? `/posts/${encodeURIComponent(postId)}/` : surface === 'archive' ? '/posts/' : '/';
+    const path = surface === 'article' && postId
+      ? `/posts/${encodeURIComponent(postId)}/`
+      : surface === 'archive' ? '/posts/'
+        : surface === 'about' ? '/about/'
+          : surface === 'diary' ? '/diary/'
+            : '/';
     if (window.location.pathname === path && !window.location.search) return;
     goTo(new URL(path, window.location.origin));
   };
