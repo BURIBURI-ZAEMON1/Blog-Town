@@ -7,9 +7,9 @@ export type TownLoadingProfile = {
 };
 
 export const TOWN_LOADING_THRESHOLDS = {
-  reveal: 90,
-  label: 460,
-  patient: 1200,
+  reveal: 360,
+  label: 1200,
+  patient: 3200,
 } as const;
 
 export const getTownLoadingProfile = (elapsedMs: number): TownLoadingProfile => {

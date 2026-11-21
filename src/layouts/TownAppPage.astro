@@ -37,6 +37,15 @@ const jsonLdText = JSON.stringify(buildPageJsonLd(selectedPost)).replace(/</g, '
       document.documentElement.classList.toggle('mode-night', dark);
       document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
       document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0b1220' : '#ffffff');
+      let entered = false;
+      try { entered = sessionStorage.getItem('town:entered') === 'true'; } catch {}
+      if (!entered) {
+        document.documentElement.classList.add('has-site-entry');
+        window.setTimeout(() => {
+          document.documentElement.classList.remove('has-site-entry');
+          document.querySelector('.app-shell')?.removeAttribute('inert');
+        }, 15000);
+      }
     </script>
     <meta name="description" content={description} />
     <meta name="author" content={siteConfig.profile.name} />
@@ -66,5 +75,14 @@ const jsonLdText = JSON.stringify(buildPageJsonLd(selectedPost)).replace(/</g, '
       import '../scripts/town-startup';
     </script>
   </head>
-  <body><TownBlogApp client:load posts={posts} layout={layout} initialSurface={initialSurface} initialPostId={initialPostId} initialPostContent={initialPostContent} /></body>
+  <body>
+    <div class="site-entry" role="status" aria-label={`正在进入${siteConfig.title}`}>
+      <div class="site-entry-ground" aria-hidden="true"></div>
+      <svg class="site-entry-veil" aria-hidden="true"><path fill-rule="evenodd"></path></svg>
+      <div class="site-entry-passage" aria-hidden="true"></div>
+      <div class="site-entry-still" aria-hidden="true"><i></i></div>
+      <div class="site-entry-caption" aria-hidden="true"><span>{siteConfig.title}</span><em>{siteConfig.tagline}</em></div>
+    </div>
+    <TownBlogApp client:load posts={posts} layout={layout} initialSurface={initialSurface} initialPostId={initialPostId} initialPostContent={initialPostContent} />
+  </body>
 </html>

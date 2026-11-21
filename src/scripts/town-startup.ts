@@ -1,7 +1,11 @@
 import { requestTownFonts } from '../lib/town-fonts';
+import { startSiteEntry } from './site-entry';
+
+const startsInTown = document.documentElement.dataset.initialSurface === 'town';
+if (!startsInTown) document.documentElement.dataset.siteReady = 'true';
+startSiteEntry();
 
 // Discover the town runtime before React hydration; TownScene reuses this module.
-const startsInTown = document.documentElement.dataset.initialSurface === 'town';
 if (startsInTown) {
   void import('../scene/brick-town/runtime').catch(requestTownFonts);
   // WebGL is the town's renderer. Fetch its core shader modules in parallel,

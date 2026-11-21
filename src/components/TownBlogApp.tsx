@@ -54,16 +54,21 @@ type TownStageProps = TownSceneProps & {
 
 function TownStage({ hoveredPost, hoverAnchor, touchPost, onCloseTouchPreview, ...sceneProps }: TownStageProps) {
   const [settled, setSettled] = useState(false);
+  const settle = () => {
+    setSettled(true);
+    document.documentElement.dataset.siteReady = 'true';
+    void requestTownFonts();
+  };
   return <div className="town-stage-wrap">
     <Suspense fallback={null}>
       <TownScene
         {...sceneProps}
         onLoadingStart={() => setSettled(false)}
-        onFirstFrame={() => { setSettled(true); void requestTownFonts(); }}
-        onInitializationError={() => { setSettled(true); void requestTownFonts(); }}
+        onFirstFrame={settle}
+        onInitializationError={settle}
       />
     </Suspense>
-    {!settled && <TownLoading reducedMotion={sceneProps.reducedMotion} />}
+    <TownLoading ready={settled} reducedMotion={sceneProps.reducedMotion} />
     <TownTooltip post={hoveredPost} anchor={hoverAnchor} />
     {touchPost && <div className="town-touch-preview" role="region" aria-label="建筑文章预览">
       <button className="touch-preview-close" aria-label="关闭建筑预览" onClick={onCloseTouchPreview}>{icon('close')}</button>
@@ -125,6 +130,15 @@ const getScore = (post: TownPostSummary, query: string, searchText = '') => {
 };
 
 export default function TownBlogApp({ posts, layout, initialSurface = 'town', initialPostId, initialPostContent }: Props) {
+  useEffect(() => {
+    const shell = document.querySelector<HTMLElement>('.app-shell');
+    if (!shell || !document.documentElement.classList.contains('has-site-entry')) return;
+    shell.inert = true;
+    return () => { shell.inert = false; };
+  }, []);
+  useEffect(() => {
+    if (initialSurface !== 'town') document.documentElement.dataset.siteReady = 'true';
+  }, [initialSurface]);
   const initialPost = initialPostId ? posts.find((post) => post.id === initialPostId) : undefined;
   const [contentById, setContentById] = useState<Record<string, ArticleSection[]>>(() =>
     initialPostId && initialPostContent ? { [initialPostId]: initialPostContent } : {},
