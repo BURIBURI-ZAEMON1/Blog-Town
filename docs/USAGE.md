@@ -565,3 +565,16 @@ npm run verify:rss
 ```
 
 检查同时覆盖扩展语法转换、图片生成与稳定哈希、绝对链接和实际构建的订阅条目。默认没有文章时，仍会生成有效的空订阅；这项检查也支持空站点。
+
+
+## 17. 小镇扩展：友邻、地标、短日记与浏览量
+
+这一版把几个独立入口放进了同一座积木小镇，默认都带有可删除的示例数据。
+
+- **友邻聚落**：在 `src/config/site.ts` 的 `friendLinks` 中添加友邻后，镇外东侧会生成对应的小屋和土路。悬停或选中友邻时，侧栏卡片与镜头会跟随；点击「去串门」打开友邻站点。`friendLinks` 为空时不会生成聚落。
+- **中心地标**：`src/data/town-layout.ts` 的 `townFeatures` 定义地标位置、标题、简介和目标链接。默认的地标是一座风车，点击后进入 `/about/`；如果你不需要，可以清空 `townFeatures`。
+- **短日记**：在 `src/data/town-diary.ts` 中维护短句、日期、地点、心情和可选图片。`diaryLayout` 选择 `district`（每篇一块公告栏）或 `single`（镇中心一块公共布告栏）；访客也能在 `/diary/` 顶栏切换，选择存入 `localStorage`。短日记不会进入文章档案、建筑地块或 RSS。
+- **浏览量**：文章页和侧栏会读取 `/api/views`。配置 Vercel Marketplace 的 Upstash Redis 后，函数会自动读取 `KV_REST_API_URL` / `KV_REST_API_TOKEN`（或 `UPSTASH_REDIS_REST_*`）；未配置时接口返回 `enabled: false`，页面不显示虚假计数。生产域名由 `siteConfig.siteUrl` 判断，预览部署不会写入计数。
+- **系列建筑**：同一 `series` 的文章会合并为一栋多层建筑，楼层数对应系列篇数；新增系列文章不会重排已有建筑。
+
+这些功能都包含在 `npm run verify` 的构建检查中。上线前至少用生产构建走一遍：首页拖动/缩放、友邻选择、风车入口、`/diary/` 深链接、街区/单板切换，以及文章页阅读量在未配置 Redis 时是否安静地隐藏。

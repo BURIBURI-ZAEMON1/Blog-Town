@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { siteConfig } from '../config/site';
 import { getSiteData } from '../lib/site-data';
+import { sortedDiaryEntries } from '../data/town-diary';
 
 const escapeXml = (value: string) => value.replace(/[<>&'"]/g, (char) => ({
   '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;',
@@ -8,8 +9,11 @@ const escapeXml = (value: string) => value.replace(/[<>&'"]/g, (char) => ({
 
 export const GET: APIRoute = async () => {
   const { posts } = await getSiteData();
+  const latestDiary = sortedDiaryEntries()[0]?.date;
   const entries = [
     { loc: new URL('/', siteConfig.siteUrl).href, lastmod: undefined },
+    { loc: new URL('/about/', siteConfig.siteUrl).href, lastmod: undefined },
+    { loc: new URL('/diary/', siteConfig.siteUrl).href, lastmod: latestDiary },
     { loc: new URL('/posts/', siteConfig.siteUrl).href, lastmod: posts[0]?.updatedAt ?? posts[0]?.date },
     ...posts.map((post) => ({
       loc: new URL(`/posts/${encodeURIComponent(post.id)}/`, siteConfig.siteUrl).href,

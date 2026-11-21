@@ -7,22 +7,28 @@ import type { ArticleSection } from '../lib/markdown';
 import { buildPageJsonLd } from '../lib/page-jsonld';
 import '../styles/global.css';
 import '../styles/markdown.css';
+import '../styles/about.css';
 
 interface Props {
   posts: TownPostSummary[];
   layout?: TownLayout;
-  initialSurface: 'town' | 'archive' | 'article';
+  initialSurface: 'town' | 'archive' | 'article' | 'about' | 'diary';
   initialPostId?: string;
   initialPostContent?: ArticleSection[];
 }
 
 const { posts, layout, initialSurface, initialPostId, initialPostContent } = Astro.props;
 const selectedPost = initialPostId ? posts.find((post) => post.id === initialPostId) : undefined;
-const pageTitle = selectedPost ? `${selectedPost.title} · ${siteConfig.title}` : initialSurface === 'archive' ? `全部文章 · ${siteConfig.title}` : siteConfig.title;
+const pageTitle = selectedPost
+  ? `${selectedPost.title} · ${siteConfig.title}`
+  : initialSurface === 'archive' ? `全部文章 · ${siteConfig.title}`
+    : initialSurface === 'about' ? `关于 · ${siteConfig.title}`
+      : initialSurface === 'diary' ? `短日记 · ${siteConfig.title}`
+        : siteConfig.title;
 const description = selectedPost?.description ?? siteConfig.description;
 const canonical = selectedPost
   ? new URL(`/posts/${encodeURIComponent(selectedPost.id)}/`, siteConfig.siteUrl)
-  : new URL(initialSurface === 'archive' ? '/posts/' : '/', siteConfig.siteUrl);
+  : new URL(initialSurface === 'archive' ? '/posts/' : initialSurface === 'about' ? '/about/' : initialSurface === 'diary' ? '/diary/' : '/', siteConfig.siteUrl);
 const cover = selectedPost?.cover ? new URL(selectedPost.cover, siteConfig.siteUrl) : new URL(siteConfig.logo, siteConfig.siteUrl);
 const jsonLdText = JSON.stringify(buildPageJsonLd(selectedPost)).replace(/</g, '\\u003c');
 ---
