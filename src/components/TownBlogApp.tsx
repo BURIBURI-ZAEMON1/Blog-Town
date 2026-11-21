@@ -1,6 +1,6 @@
-import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ElementType } from 'react';
-import type { SceneAnchor, TownPostSummary } from './TownScene';
+import type { SceneAnchor, TownPostSummary, TownSceneHandle } from './TownScene';
 import type { SearchEntry } from '../scene/brick-town/types';
 import type { ArticleSection } from '../lib/markdown';
 import TownLoading from './TownLoading';
@@ -46,13 +46,14 @@ const TownScene = lazy(async () => {
 });
 
 type TownStageProps = TownSceneProps & {
+  sceneRef: React.RefObject<TownSceneHandle | null>;
   hoveredPost?: TownPostSummary;
   hoverAnchor?: SceneAnchor;
   touchPost?: TownPostSummary;
   onCloseTouchPreview: () => void;
 };
 
-function TownStage({ hoveredPost, hoverAnchor, touchPost, onCloseTouchPreview, ...sceneProps }: TownStageProps) {
+function TownStage({ sceneRef, hoveredPost, hoverAnchor, touchPost, onCloseTouchPreview, ...sceneProps }: TownStageProps) {
   const [settled, setSettled] = useState(false);
   const settle = () => {
     setSettled(true);
@@ -63,6 +64,7 @@ function TownStage({ hoveredPost, hoverAnchor, touchPost, onCloseTouchPreview, .
     <Suspense fallback={null}>
       <TownScene
         {...sceneProps}
+        sceneRef={sceneRef}
         onLoadingStart={() => setSettled(false)}
         onFirstFrame={settle}
         onInitializationError={settle}
@@ -143,8 +145,36 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const [contentById, setContentById] = useState<Record<string, ArticleSection[]>>(() =>
     initialPostId && initialPostContent ? { [initialPostId]: initialPostContent } : {},
   );
-  const [contentError, setContentError] = useState<string>();
-  const [contentRetry, setContentRetry] = useState(0);
+  const [contentErrors, setContentErrors] = useState<Record<string, true>>({});
+  const contentCache = useRef(contentById);
+  const contentRequests = useRef(new Map<string, Promise<ArticleSection[]>>());
+  const townSceneRef = useRef<TownSceneHandle | null>(null);
+  const pendingArticle = useRef<string | undefined>(undefined);
+  const loadArticle = useCallback((id: string): Promise<ArticleSection[]> => {
+    if (contentCache.current[id]) return Promise.resolve(contentCache.current[id]);
+    const existing = contentRequests.current.get(id);
+    if (existing) return existing;
+    setContentErrors((current) => {
+      if (!current[id]) return current;
+      const next = { ...current }; delete next[id]; return next;
+    });
+    const request = fetch(`/data/posts/${encodeURIComponent(id)}.json`)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) throw new Error('Invalid article payload');
+        return data as ArticleSection[];
+      })
+      .then((sections) => {
+        contentCache.current = { ...contentCache.current, [id]: sections };
+        setContentById(contentCache.current);
+        return sections;
+      })
+      .catch((error) => { setContentErrors((current) => ({ ...current, [id]: true })); throw error; })
+      .finally(() => { contentRequests.current.delete(id); });
+    contentRequests.current.set(id, request);
+    return request;
+  }, []);
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanel>('profile');
   const [hoveredPostId, setHoveredPostId] = useState<string>();
   const [hoverAnchor, setHoverAnchor] = useState<SceneAnchor>();
@@ -211,28 +241,9 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   const selectedPost = selectedPostId ? postMap.get(selectedPostId) : undefined;
   const selectedSections = selectedPostId ? contentById[selectedPostId] : undefined;
   useEffect(() => {
-    if (surface !== 'article' || !selectedPostId || contentById[selectedPostId]) {
-      setContentError(undefined);
-      return;
-    }
-    let cancelled = false;
-    setContentError(undefined);
-    fetch(`/data/posts/${encodeURIComponent(selectedPostId)}.json`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data: unknown = await response.json();
-        if (!Array.isArray(data)) throw new Error('Invalid article payload');
-        return data as ArticleSection[];
-      })
-      .then((sections) => {
-        if (cancelled) return;
-        setContentById((current) => ({ ...current, [selectedPostId]: sections }));
-      })
-      .catch(() => {
-        if (!cancelled) setContentError(selectedPostId);
-      });
-    return () => { cancelled = true; };
-  }, [contentById, contentRetry, selectedPostId, surface]);
+    if (surface !== 'article' || !selectedPostId || contentById[selectedPostId] || contentErrors[selectedPostId]) return;
+    void loadArticle(selectedPostId).catch(() => {});
+  }, [contentById, contentErrors, loadArticle, selectedPostId, surface]);
   useEffect(() => {
     if (!(searchOpen || query.trim()) || searchEntries || searchIndexRequested.current) return;
     searchIndexRequested.current = true;
@@ -338,6 +349,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   }, []);
 
   useEffect(() => {
+    pendingArticle.current = undefined;
+    townSceneRef.current?.cancelFocus();
     setMobileSidebarOpen(false);
     setTouchPostId(undefined);
     setSearchOpen(false);
@@ -349,6 +362,8 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   }, [navigation]);
 
   const navigate = (nextSurface: MainSurface, postId?: string) => {
+    pendingArticle.current = undefined;
+    townSceneRef.current?.cancelFocus();
     setMobileSidebarOpen(false);
     setTouchPostId(undefined);
     setSearchOpen(false);
@@ -357,12 +372,22 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
   };
 
   const openArticle = (id: string) => {
-    navigate('article', id);
+    void loadArticle(id).catch(() => {});
     setPreviewCategory(undefined);
     setPreviewTag(undefined);
     setHoveredPostId(undefined);
     setHoverAnchor(undefined);
+    setSearchOpen(false);
+    inputRef.current?.blur();
+    pendingArticle.current = id;
+    const enter = () => { if (pendingArticle.current === id) navigate('article', id); };
+    if (surface === 'town' && window.location.pathname === '/' && !window.matchMedia('(max-width: 720px), (prefers-reduced-motion: reduce)').matches && townSceneRef.current?.focusPost(id, enter)) return;
+    enter();
   };
+
+  useEffect(() => {
+    if ((isMobile || reducedMotion) && pendingArticle.current) navigate('article', pendingArticle.current);
+  }, [isMobile, reducedMotion]);
 
   const chooseCategory = (category?: string) => {
     setPreviewCategory(undefined);
@@ -535,7 +560,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         <div className="main-scroll" ref={mainSurfaceRef}>
         {surface === 'town' && <section className="town-home">
           <h1 className="visually-hidden">{siteConfig.title} — {siteConfig.tagline}</h1>
-          <TownStage posts={posts} layout={layout} newPostIds={newPostIds} guidePostId={guidePostId} onTownExplored={markExplored} season={season} activePostId={selectedPostId} hoveredPostId={touchPostId ?? hoveredPostId} query={query} category={highlightCategory} tag={highlightTag} categoryPreview={Boolean(previewCategory)} tagPreview={Boolean(previewTag)} colorMode={colorMode} reducedMotion={reducedMotion} onHoverPost={onHoverPost} onResolvePostAnchor={onResolvePostAnchor} onSelectPost={selectScenePost} hoveredPost={hoveredPost} hoverAnchor={hoverAnchor} touchPost={touchPost} onCloseTouchPreview={() => setTouchPostId(undefined)} />
+          <TownStage sceneRef={townSceneRef} posts={posts} layout={layout} newPostIds={newPostIds} guidePostId={guidePostId} onTownExplored={markExplored} season={season} activePostId={selectedPostId} hoveredPostId={touchPostId ?? hoveredPostId} query={query} category={highlightCategory} tag={highlightTag} categoryPreview={Boolean(previewCategory)} tagPreview={Boolean(previewTag)} colorMode={colorMode} reducedMotion={reducedMotion} onHoverPost={onHoverPost} onResolvePostAnchor={onResolvePostAnchor} onSelectPost={selectScenePost} hoveredPost={hoveredPost} hoverAnchor={hoverAnchor} touchPost={touchPost} onCloseTouchPreview={() => setTouchPostId(undefined)} />
           <p className="mobile-town-hint">点击建筑预览，再次点击或选择「阅读文章」打开；单指任意方向拖动小镇，双指捏合缩放。在小镇外滑动可浏览页面。</p>
           <div className="town-mobile-support">
             <div className="town-caption"><span><i className="caption-dot" /> {siteConfig.title} · {SEASON_PROFILES[season].label}季小镇</span><span>建筑即文章 / {layout?.plots.length ?? 0} buildings / {posts.length} article floors</span><span className="caption-spacer" /><a href="/posts/" onClick={(event) => handleInternalClick(event, () => navigate('archive'))}>打开完整档案 {icon('arrow')}</a></div>
@@ -544,7 +569,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         </section>}
         {surface === 'archive' && <ArchiveView posts={filteredPosts} onOpen={openArticle} />}
         {surface === 'article' && selectedPost && selectedSections && layout && <ArticleView colorMode={colorMode} navigation={navigation} post={selectedPost} sections={selectedSections} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
-        {surface === 'article' && selectedPost && !selectedSections && <ArticleLoading post={selectedPost} error={contentError === selectedPost.id} onRetry={() => { setContentError(undefined); setContentRetry((value) => value + 1); }} />}
+        {surface === 'article' && selectedPost && !selectedSections && <ArticleLoading post={selectedPost} error={Boolean(contentErrors[selectedPost.id])} onRetry={() => { void loadArticle(selectedPost.id).catch(() => {}); }} />}
         {surface === 'article' && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
       </main>

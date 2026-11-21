@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { createTownLayout } from '../data/town-layout';
 import { SEASON_PROFILES } from '../data/town-seasons';
 import type { TownSceneProps } from '../scene/brick-town/types';
@@ -6,8 +6,10 @@ import type { mountBrickTown } from '../scene/brick-town/runtime';
 import TownPostNotices from './TownPostNotices';
 import type { PostNoticeFrame } from '../data/town-post-notices';
 export type { TownPost, TownPostSummary, TownPostContent, SceneAnchor } from '../scene/brick-town/types';
+export type TownSceneHandle = Pick<ReturnType<typeof mountBrickTown>, 'focusPost' | 'cancelFocus'>;
 
 type TownSceneLifecycleProps = TownSceneProps & {
+  sceneRef?: RefObject<TownSceneHandle | null>;
   onLoadingStart?: () => void;
   onFirstFrame?: (loadingMs: number) => void;
   onInitializationError?: () => void;
@@ -36,8 +38,9 @@ export default function TownScene(props: TownSceneLifecycleProps) {
         setReady(true);
         latest.current.onFirstFrame?.(loadingMs);
       });
+      if (latest.current.sceneRef) latest.current.sceneRef.current = runtimeRef.current;
     }).catch((initializationError) => { if (!cancelled) { console.error('Brick town initialization failed', initializationError); setError(true); latest.current.onInitializationError?.(); } });
-    return () => { cancelled = true; runtimeRef.current?.dispose(); runtimeRef.current = undefined; };
+    return () => { cancelled = true; if (latest.current.sceneRef) latest.current.sceneRef.current = null; runtimeRef.current?.dispose(); runtimeRef.current = undefined; };
   }, [fallback, props.posts]);
   useEffect(() => { runtimeRef.current?.update(props); }, [props.season, props.colorMode, props.reducedMotion, props.hoveredPostId, props.activePostId, props.newPostIds, props.guidePostId, props.query, props.category, props.tag, ready]);
   return <div className="town-canvas-host brick-town-host" data-testid="town-canvas">

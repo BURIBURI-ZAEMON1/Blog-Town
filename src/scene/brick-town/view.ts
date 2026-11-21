@@ -5,6 +5,32 @@ export type PanBounds = { minX: number; maxX: number; minZ: number; maxZ: number
 
 export type RainDrop = { x: number; z: number; y: number; speed: number };
 
+export const ARTICLE_FOCUS_MS = 760;
+export const ARTICLE_FOCUS_ZOOM = 2.35;
+type FocusPose = { x: number; y: number; z: number; zoom: number };
+const easeFocus = (t: number) => t * t * t * (10 + t * (-15 + 6 * t));
+
+export function getArticleFocusPose(from: FocusPose, to: Omit<FocusPose, 'zoom'>, elapsedMs: number): FocusPose {
+  const t = Math.max(0, Math.min(1, elapsedMs / ARTICLE_FOCUS_MS));
+  const endZoom = Math.max(from.zoom, ARTICLE_FOCUS_ZOOM);
+  if (t === 0) return { ...from };
+  if (t === 1) return { x: to.x, y: to.y, z: to.z, zoom: endZoom };
+  const progress = easeFocus(t);
+  const distance = Math.hypot(to.x - from.x, to.z - from.z);
+  const closeView = Math.max(0, Math.min(1, (from.zoom - 1.5) / .85));
+  const startSpan = 1 / from.zoom, endSpan = 1 / endZoom;
+  const travelSpan = Math.min(1 / .95, startSpan + Math.max(0, distance - 8) * .014 * closeView);
+  const span = t < .32
+    ? startSpan + (travelSpan - startSpan) * easeFocus(t / .32)
+    : travelSpan + (endSpan - travelSpan) * easeFocus((t - .32) / .68);
+  return {
+    x: from.x + (to.x - from.x) * progress,
+    y: from.y + (to.y - from.y) * progress,
+    z: from.z + (to.z - from.z) * progress,
+    zoom: 1 / (travelSpan > startSpan ? span : startSpan + (endSpan - startSpan) * progress ** 1.35),
+  };
+}
+
 export const createRainField = (
   random: () => number,
   count: number,

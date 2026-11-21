@@ -25,7 +25,7 @@ import { createPostNoticeProjector } from './post-notices';
 import type { PostNoticeFrame } from '../../data/town-post-notices';
 import type { TownLayout } from '../../data/town-layout';
 import type { TownSceneProps } from './types';
-import { clampToPanBounds, getCameraPanBounds, getDragPanDelta } from './view';
+import { ARTICLE_FOCUS_MS, clampToPanBounds, getArticleFocusPose, getCameraPanBounds, getDragPanDelta } from './view';
 
 export type SceneState = Pick<TownSceneProps,'activePostId'|'hoveredPostId'|'newPostIds'|'guidePostId'|'query'|'category'|'tag'|'colorMode'|'reducedMotion'|'season'>;
 export type SceneCallbacks = Pick<TownSceneProps,'onHoverPost'|'onResolvePostAnchor'|'onSelectPost'|'onTownExplored'> & {
@@ -248,6 +248,21 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     camera.orthoBottom=centerY+(camera.orthoBottom!-centerY)*scale;
     zoom=clamped;clampCameraTarget();requestDraw();
   };
+  let focusFlight: { from: { x:number; y:number; z:number; zoom:number }; to: Vector3; started:number; onComplete:()=>void } | undefined;
+  function cancelFocus(){if(!focusFlight)return;focusFlight=undefined;delete canvas.dataset.focusPost;delete canvas.dataset.focusProgress;}
+  function focusPost(id:string,onComplete:()=>void){
+    const house=houseByPostId.get(id);
+    if(disposed||window.matchMedia('(max-width: 720px)').matches||state.reducedMotion||!inView||!visible||!firstFramePublished||!house)return false;
+    focusFlight={
+      from:{x:camera.target.x,y:camera.target.y,z:camera.target.z,zoom},
+      to:new Vector3(house.plot.x,GROUND_Y+house.ids.length*FLOOR_HEIGHT*.5,house.plot.z),
+      started:performance.now(),onComplete,
+    };
+    canvas.dataset.focusPost=id;canvas.dataset.focusProgress='0';
+    canvas.dataset.focusDurationMs=String(ARTICLE_FOCUS_MS);
+    lastHover=undefined;callbacks().onHoverPost(undefined);requestDraw();
+    return true;
+  }
   function pick(event:PointerEvent){
     const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
     // Pick ALL real solid surfaces. Roof/terrain/tree occlusion is respected;
@@ -255,8 +270,9 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     const hit=scene.pick(x,y,m=>m.isPickable&&m.isVisible);
     return hit?.hit?hit.pickedMesh?.metadata?.postId as string|undefined:undefined;
   }
-  const onWheel=(e:WheelEvent)=>{e.preventDefault();applyZoom(zoom-e.deltaY*0.0015);lastHover=undefined;callbacks().onHoverPost(undefined);};
+  const onWheel=(e:WheelEvent)=>{e.preventDefault();if(focusFlight)return;applyZoom(zoom-e.deltaY*0.0015);lastHover=undefined;callbacks().onHoverPost(undefined);};
   const onMove=(e:PointerEvent)=>{
+    if(focusFlight)return;
     if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
     if(pinch&&pointers.size>=2){
       const [a,b]=Array.from(pointers.values());
@@ -290,6 +306,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const onLeave=(e:PointerEvent)=>{if(e.pointerType!=='mouse')return;lastHover=undefined;callbacks().onHoverPost(undefined);if(!down)canvas.style.cursor='grab';};
   let down:{x:number;y:number;lastX:number;lastY:number;pointerId:number;moved:boolean}|undefined;
   const onDown=(e:PointerEvent)=>{
+    if(focusFlight)return;
     if(e.button!==0||(e.pointerType==='mouse'&&!e.isPrimary))return;
     pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,type:e.pointerType});
     canvas.setPointerCapture?.(e.pointerId);
@@ -330,13 +347,22 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   let lastDiagnostics=0,slowRenderFrames=0,firstFramePublished=false;
   function publishDiagnostics(now:number){
     canvas.dataset.ready='true';canvas.dataset.frames=String(frames);canvas.dataset.weather=rainy?weather.kind:'clear';canvas.dataset.season=state.season;canvas.dataset.colorMode=state.colorMode;canvas.dataset.reducedMotion=String(state.reducedMotion);canvas.dataset.seasonChanges=String(seasonChanges);canvas.dataset.seasonCover=String(seasons.coverCount);canvas.dataset.seasonTransition=String(seasons.transitioning);canvas.dataset.precipitationAnimated=String(weather.animated);canvas.dataset.renderer=engine.webGLVersion===2?'webgl2':'webgl1';
-    canvas.dataset.cameraX=camera.target.x.toFixed(2);canvas.dataset.cameraZ=camera.target.z.toFixed(2);canvas.dataset.zoom=zoom.toFixed(3);canvas.dataset.rainDrops=String(weather.count);
+    canvas.dataset.cameraX=camera.target.x.toFixed(2);canvas.dataset.cameraY=camera.target.y.toFixed(2);canvas.dataset.cameraZ=camera.target.z.toFixed(2);canvas.dataset.zoom=zoom.toFixed(3);canvas.dataset.rainDrops=String(weather.count);
     canvas.dataset.sceneMeshes=String(scene.meshes.length);canvas.dataset.sceneMaterials=String(scene.materials.length);canvas.dataset.sceneVertices=String(scene.getTotalVertices());canvas.dataset.thinInstances=String(scene.meshes.reduce((sum,mesh)=>sum+('thinInstanceCount' in mesh?Number(mesh.thinInstanceCount):0),0));lastDiagnostics=now;
   }
   function render(){
     if(disposed||!inView||!visible)return;
-    const now=performance.now();if(now-lastFrame<(mobile?1000/24:1000/30))return;
+    const now=performance.now();if(now-lastFrame<(focusFlight?1000/60:mobile?1000/24:1000/30))return;
     const dt=Math.min(0.05,lastFrame?(now-lastFrame)/1000:0.016);lastFrame=now;elapsed+=dt;
+    let completedFocus:(()=>void)|undefined;
+    if(focusFlight){
+      const age=now-focusFlight.started;
+      const pose=getArticleFocusPose(focusFlight.from,focusFlight.to,age);
+      applyZoom(pose.zoom);
+      camera.target.set(pose.x,pose.y,pose.z);
+      canvas.dataset.focusProgress=String(Math.min(1,age/ARTICLE_FOCUS_MS));
+      if(age>=ARTICLE_FOCUS_MS){completedFocus=focusFlight.onComplete;focusFlight=undefined;}
+    }
     const slot=Math.floor(Date.now()/900000);
     if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsPrecipitating(layout.seed,slot);populate();lighting();}
     if(!state.reducedMotion)tickLife(citizens,dt,layout);
@@ -369,7 +395,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       window.setTimeout(()=>{void initVisualEffects();},mobile?350:0);
     }
     if(ao&&renderCost>55){slowRenderFrames++;if(slowRenderFrames>=4){ao.dispose();ao=undefined;canvas.dataset.adaptiveAo='off';}}else slowRenderFrames=Math.max(0,slowRenderFrames-1);
-    if(frames===1||now-lastDiagnostics>500)publishDiagnostics(now);
+    if(frames===1||focusFlight||completedFocus||now-lastDiagnostics>500)publishDiagnostics(now);
+    completedFocus?.();
     if(state.reducedMotion&&--renderBurst<=0&&firstFramePublished&&effectsReady&&scene.isReady()&&engine.areAllEffectsReady()){
       engine.stopRenderLoop(render);canvas.dataset.renderLoop='idle';publishDiagnostics(now);
       // Static weather still follows the real 15-minute boundary without a
@@ -378,11 +405,11 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     }
   }
   const syncVisibility=()=>{if(inView&&visible){lastFrame=0;requestDraw();}else{engine.stopRenderLoop(render);window.clearTimeout(weatherWakeTimer);weatherWakeTimer=undefined;canvas.dataset.renderLoop='paused';}};
-  const observer=new IntersectionObserver(([entry])=>{inView=!!entry?.isIntersecting;syncVisibility();});observer.observe(canvas);
-  const onVisibility=()=>{visible=!document.hidden;syncVisibility();};document.addEventListener('visibilitychange',onVisibility);
+  const observer=new IntersectionObserver(([entry])=>{inView=!!entry?.isIntersecting;syncVisibility();if(!inView&&focusFlight){const complete=focusFlight.onComplete;cancelFocus();complete();}});observer.observe(canvas);
+  const onVisibility=()=>{visible=!document.hidden;syncVisibility();if(!visible&&focusFlight){const complete=focusFlight.onComplete;cancelFocus();complete();}};document.addEventListener('visibilitychange',onVisibility);
   engine.runRenderLoop(render);
   return {
-    update,anchor,
+    update,anchor,focusPost,cancelFocus,
     dispose(){disposed=true;window.clearTimeout(weatherWakeTimer);engine.stopRenderLoop(render);resize.disconnect();observer.disconnect();document.removeEventListener('visibilitychange',onVisibility);canvas.removeEventListener('wheel',onWheel);canvas.removeEventListener('pointermove',onMove);canvas.removeEventListener('pointerleave',onLeave);canvas.removeEventListener('pointerdown',onDown);canvas.removeEventListener('pointerup',onUp);canvas.removeEventListener('pointercancel',onCancel);pointers.clear();pinch=undefined;down=undefined;ao?.dispose();seasons.dispose();weather.dispose();scene.dispose();engine.dispose();},
   };
 }
