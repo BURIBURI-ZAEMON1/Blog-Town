@@ -6,7 +6,7 @@ import type { mountBrickTown } from '../scene/brick-town/runtime';
 import TownPostNotices from './TownPostNotices';
 import type { PostNoticeFrame } from '../data/town-post-notices';
 export type { TownPost, TownPostSummary, TownPostContent, SceneAnchor } from '../scene/brick-town/types';
-export type TownSceneHandle = Pick<ReturnType<typeof mountBrickTown>, 'focusPost' | 'cancelFocus'>;
+export type TownSceneHandle = Pick<ReturnType<typeof mountBrickTown>, 'focusPost' | 'focusPlace' | 'cancelFocus'>;
 
 type TownSceneLifecycleProps = TownSceneProps & {
   sceneRef?: RefObject<TownSceneHandle | null>;
@@ -42,9 +42,9 @@ export default function TownScene(props: TownSceneLifecycleProps) {
     }).catch((initializationError) => { if (!cancelled) { console.error('Brick town initialization failed', initializationError); setError(true); latest.current.onInitializationError?.(); } });
     return () => { cancelled = true; if (latest.current.sceneRef) latest.current.sceneRef.current = null; runtimeRef.current?.dispose(); runtimeRef.current = undefined; };
   }, [fallback, props.posts]);
-  useEffect(() => { runtimeRef.current?.update(props); }, [props.season, props.colorMode, props.reducedMotion, props.hoveredPostId, props.activePostId, props.newPostIds, props.guidePostId, props.query, props.category, props.tag, ready]);
+  useEffect(() => { runtimeRef.current?.update(props); }, [props.season, props.colorMode, props.reducedMotion, props.hoveredPostId, props.hoveredPlaceId, props.activePostId, props.newPostIds, props.guidePostId, props.query, props.category, props.tag, ready]);
   return <div className="town-canvas-host brick-town-host" data-testid="town-canvas">
-    <canvas ref={canvasRef} aria-label={`${SEASON_PROFILES[props.season].label}季积木小镇：桌面使用鼠标滚轮缩放，手机双指捏合缩放；点击建筑阅读文章；拖动移动地图`} />
+    <canvas ref={canvasRef} aria-label={`${SEASON_PROFILES[props.season].label}季积木小镇：桌面使用鼠标滚轮缩放，手机双指捏合缩放；点击建筑阅读文章，点击友邻小屋访问网站，点击中心风车查看关于；拖动移动地图`} />
     {ready && noticeFrame && <TownPostNotices posts={props.posts} newPostIds={props.newPostIds} frame={noticeFrame} reducedMotion={props.reducedMotion} onOpen={(id) => { latest.current.onTownExplored?.(); latest.current.onSelectPost(id); }} />}
     {error && <div className="brick-loading" role="status">当前设备无法绘制小镇，请通过顶部档案入口阅读。</div>}
   </div>;

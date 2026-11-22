@@ -47,10 +47,10 @@ export function updatePageMeta(surface: MainSurface, selectedPost?: TownPostSumm
     ? `${selectedPost.title} · ${siteConfig.title}`
     : surface === 'archive'
       ? `全部文章 · ${siteConfig.title}`
-      : siteConfig.title;
+      : surface === 'about' ? `关于 · ${siteConfig.title}` : siteConfig.title;
   const description = selectedPost?.description ?? siteConfig.description;
   const canonical = new URL(
-    selectedPost ? `/posts/${encodeURIComponent(selectedPost.id)}/` : surface === 'archive' ? '/posts/' : '/',
+    selectedPost ? `/posts/${encodeURIComponent(selectedPost.id)}/` : surface === 'archive' ? '/posts/' : surface === 'about' ? '/about/' : '/',
     siteConfig.siteUrl,
   ).href;
   const cover = new URL(selectedPost?.cover ?? siteConfig.logo, siteConfig.siteUrl).href;

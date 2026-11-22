@@ -12,11 +12,12 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
-    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:seasons && npm run verify:markdown && npm run verify:rss",
+    "verify": "npm run check && npm run build && npm run verify:content && npm run verify:seasons && npm run verify:markdown && npm run verify:rss && npm run verify:features",
     "verify:content": "node scripts/verify-content.mjs",
     "verify:seasons": "node scripts/verify-town-seasons.mjs",
     "verify:markdown": "node scripts/verify-markdown.mjs",
-    "verify:rss": "node scripts/verify-rss.mjs"
+    "verify:rss": "node scripts/verify-rss.mjs",
+    "verify:features": "node scripts/verify-town-features.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.4",

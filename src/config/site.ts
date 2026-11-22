@@ -22,6 +22,8 @@ interface SiteConfig {
   logo: string;
   language: string;
   townSeed: string;
+  /** Optional actual launch date (YYYY-MM-DD); otherwise days are measured from the first post. */
+  launchDate?: string;
   profile: {
     name: string;
     avatar: string;

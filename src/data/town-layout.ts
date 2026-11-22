@@ -1,3 +1,5 @@
+import { inTownOutline } from './town-outline';
+
 export type RegionKind = 'road' | 'river' | 'forest' | 'landmark' | 'buildable';
 export type Point = { x: number; z: number };
 
@@ -55,6 +57,63 @@ export interface TownEntity {
   rotation?: number;
 }
 
+export interface TownFeature extends Point {
+  id: string;
+  kind: 'about';
+  width: number;
+  depth: number;
+  title: string;
+  summary: string;
+  href: string;
+}
+export interface TownFriendHut extends Point {
+  id: string;
+  width: number;
+  depth: number;
+  rotation: number;
+  accent: number;
+}
+export interface TownHamlet {
+  center: Point;
+  radius: number;
+  huts: TownFriendHut[];
+  path: Point[];
+}
+const createTownHamlet = (friends: { id: string }[]): TownHamlet | undefined => {
+  if (!friends.length) return;
+  const center = { x: 22, z: -13 };
+  const entrance = Math.atan2(-center.z, -center.x);
+  const slots: Array<Point & { radius: number; rotation: number }> = [];
+  // Fill the far arc first, leaving the green and empty lots for future friends.
+  for (let radius = 9.6; radius <= 16.1; radius += 3.2) {
+    const count = Math.floor(Math.PI * 2 * radius / 3);
+    for (let index = 0; index < count; index++) {
+      const offset = index === 0 ? 0 : Math.ceil(index / 2) * (index % 2 ? -1 : 1);
+      const angle = entrance + Math.PI + offset * Math.PI * 2 / count;
+      const entranceDistance = Math.abs(Math.atan2(Math.sin(angle - entrance), Math.cos(angle - entrance)));
+      if (entranceDistance < Math.PI / 6) continue;
+      const x = center.x + Math.cos(angle) * radius, z = center.z + Math.sin(angle) * radius;
+      const footprint = { x, z, width: 2.8, depth: 2.8 };
+      if ([-1, 1].some(dx => [-1, 1].some(dz => !inTownOutline({ x: x + dx * 1.4, z: z + dz * 1.4 })))) continue;
+      if ([river, ...roads].some(region => intersectsRegion(footprint, region))) continue;
+      slots.push({ x, z, radius, rotation: Math.atan2(center.x - x, center.z - z) });
+    }
+  }
+  if (friends.length > slots.length) throw new Error(`The friend hamlet's ${slots.length} terrain-safe lots are full; extend its reserved area before adding more friends.`);
+  const huts = friends.map((friend, index) => ({ ...slots[index], id: friend.id, width: 1.44, depth: 1.08, accent: index % 5 }));
+  const radius = Math.max(9.6, ...huts.map(hut => hut.radius));
+  const ring = Array.from({ length: 49 }, (_, index) => {
+    const angle = entrance + index * Math.PI / 24;
+    return { x: center.x + Math.cos(angle) * 8.3, z: center.z + Math.sin(angle) * 8.3 };
+  });
+  return { center, radius, huts, path: [...ring, { x: 11.5, z: -6.8 }, { x: 9.2, z: 1.6 }] };
+};
+
+export const townFeatures: TownFeature[] = [{
+  id: 'about', kind: 'about', x: 0, z: 0, width: 2.24, depth: 2,
+  title: '关于', summary: '关于作者，以及这座积木小镇。', href: '/about/',
+}];
+
 export interface TownLayout {
   seed: string;
   regions: WorldRegion[];
@@ -62,6 +121,8 @@ export interface TownLayout {
   plots: TownPlot[];
   /** All collision-reserved article lots, including currently empty lots. */
   reservedPlots: TownPlot[];
+  features?: TownFeature[];
+  hamlet?: TownHamlet;
   center: Point;
 }
 
@@ -441,7 +502,13 @@ function prepareLots(seed: string) {
   return { candidates, ringCapacity, plotWidth, plotDepth };
 }
 
-export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[] = []): TownLayout => {
+export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[] = [], friends: { id: string }[] = []): TownLayout => {
+  const hamlet = createTownHamlet(friends);
+  const accessRegion: WorldRegion | undefined = hamlet ? { id: 'hamlet-access', kind: 'road', polygon: corridorPolygon(hamlet.path.slice(-3), .95) } : undefined;
+  const inHamlet = (plot: { x: number; z: number; width: number; depth: number }) => hamlet && Math.hypot(
+    Math.max(0, Math.abs(plot.x - hamlet.center.x) - plot.width / 2),
+    Math.max(0, Math.abs(plot.z - hamlet.center.z) - plot.depth / 2),
+  ) < hamlet.radius + 1.6 || !!accessRegion && intersectsRegion(plot, accessRegion);
   const groups = groupPosts(posts);
   const presets = stableArticlePlots[seed] ?? {};
   const orderedGroups = [...groups].sort((a, b) => {
@@ -459,7 +526,9 @@ export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[
   if (!preparedLots || preparedSeed !== seed) {
     preparedLots = prepareLots(seed); preparedSeed = seed;
   }
-  const { candidates, ringCapacity, plotWidth, plotDepth } = preparedLots;
+  const { candidates: preparedCandidates, ringCapacity, plotWidth, plotDepth } = preparedLots;
+  // Reserve the whole courtyard before assigning any article, including empty lots.
+  const candidates = hamlet ? preparedCandidates.filter(({ slot }) => !inHamlet({ ...slot, width: plotWidth, depth: plotDepth })) : preparedCandidates;
 
   let unlockedRing = 0;
   const ringOccupied = new Map<number, number>();
@@ -513,5 +582,5 @@ export const createTownLayout = (seed = 'river-bend-demo-v2', posts: LayoutPost[
       seedIndex: reservedPlots.length,
     });
   }
-  return { seed, regions: worldRegions, entities: townEntities, plots, reservedPlots, center: { x: 0, z: 0 } };
+  return { seed, regions: worldRegions, entities: townEntities.filter(entity => !inHamlet(entity)), plots, reservedPlots, features: townFeatures, hamlet, center: { x: 0, z: 0 } };
 };

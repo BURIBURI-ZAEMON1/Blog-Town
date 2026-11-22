@@ -46,6 +46,7 @@ export type TownSceneProps = {
   layout?: TownLayout;
   activePostId?: string;
   hoveredPostId?: string;
+  hoveredPlaceId?: string;
   newPostIds?: readonly string[];
   guidePostId?: string;
   query: string;
@@ -56,6 +57,9 @@ export type TownSceneProps = {
   colorMode: 'day' | 'night';
   season: Season;
   reducedMotion: boolean;
+  onHoverPlace?: (id?: string, anchor?: SceneAnchor) => void;
+  onResolvePlaceAnchor?: (id: string, anchor: SceneAnchor) => void;
+  onSelectPlace?: (id: string) => void;
   onHoverPost: (id?: string, anchor?: SceneAnchor) => void;
   onResolvePostAnchor: (id: string, anchor: SceneAnchor) => void;
   onSelectPost: (id: string, pointerType?: string) => void;

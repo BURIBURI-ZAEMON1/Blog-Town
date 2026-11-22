@@ -24,10 +24,11 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const terrainStuds = mobile ? 3 : 2;
   const roads = Object.entries(roadCenterlines).map(([key, path]) => ({ near: createPathProximity(samplePath(extendTownPath(path, key === 'main'), 12)), width: roadWidths[key as keyof typeof roadWidths] }));
   const nearRiver = createPathProximity(samplePath(extendTownPath(riverCenterline), 12));
-  const reserved = layout.reservedPlots ?? layout.plots;
+  const reserved = [...(layout.reservedPlots ?? layout.plots), ...(layout.features ?? []), ...(layout.hamlet?.huts.map(hut => ({ ...hut, width: 2.6, depth: 2.6 })) ?? [])];
+  const nearHamlet = layout.hamlet ? createPathProximity(samplePath(layout.hamlet.path, 12)) : undefined;
   const access = layout.plots.map(plot=>createPathProximity(makeThiefArrivalRoute(plot,townTravelRoutes,samplePath,layout.plots)));
-  const isRoad = (p: Point, clearance = 0) => access.some(near=>near(p,0.30+clearance))||roads.some(r => r.near(p,r.width / 2 + clearance)) || Math.hypot(p.x,p.z) < townCenterRoundaboutRadius + clearance;
-  const inHouse = (p: Point, clearance = 0) => reserved.some(b => Math.abs(p.x-b.x) < b.width/2+clearance && Math.abs(p.z-b.z) < b.depth/2+clearance);
+  const isRoad = (p: Point, clearance = 0) => access.some(near=>near(p,0.30+clearance))||roads.some(r => r.near(p,r.width / 2 + clearance)) || !!nearHamlet?.(p, .65 + clearance) || Math.hypot(p.x,p.z) < townCenterRoundaboutRadius + clearance;
+  const inHouse = (p: Point, clearance = 0) => !!(layout.hamlet && Math.hypot(p.x-layout.hamlet.center.x,p.z-layout.hamlet.center.z)<layout.hamlet.radius+1.5+clearance) || reserved.some(b => Math.abs(p.x-b.x) < b.width/2+clearance && Math.abs(p.z-b.z) < b.depth/2+clearance);
   const inBuiltHouse = (p:Point,clearance=0)=>layout.plots.some(b=>Math.abs(p.x-b.x)<b.width/2+clearance&&Math.abs(p.z-b.z)<b.depth/2+clearance);
   const inEntity = (p:Point,clearance=0)=>layout.entities.some(e=>Math.abs(p.x-e.x)<e.width/2+clearance&&Math.abs(p.z-e.z)<e.depth/2+clearance);
   const isWater = (p: Point, clearance = 0) => nearRiver(p,riverWidth/2+clearance);
@@ -92,18 +93,20 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   }
   // Fountain made of concentric stepped brick courses and transparent-blue plates.
   const fountain = new BrickKit(scene);
-  fountain.cylinder(0,0.10,0,1.76,0.16,C.roadLight);
-  for(let i=0;i<12;i++) {
-    const a=i*Math.PI/6;
-    fountain.box(Math.cos(a)*0.65,0.27,Math.sin(a)*0.65,0.34,0.22,0.24,C.ivory,-a);
-    snowSurfaces.add({ x:Math.cos(a)*0.65,y:0.38,z:Math.sin(a)*0.65,width:0.34,depth:0.24,yaw:-a });
+  if (!layout.features?.some(feature => feature.kind === 'about')) {
+    fountain.cylinder(0,0.10,0,1.76,0.16,C.roadLight);
+    for(let i=0;i<12;i++) {
+      const a=i*Math.PI/6;
+      fountain.box(Math.cos(a)*0.65,0.27,Math.sin(a)*0.65,0.34,0.22,0.24,C.ivory,-a);
+      snowSurfaces.add({ x:Math.cos(a)*0.65,y:0.38,z:Math.sin(a)*0.65,width:0.34,depth:0.24,yaw:-a });
+    }
+    fountain.cylinder(0,0.2,0,1.12,0.035,C.water);
+    fountain.cylinder(0,0.48,0,0.30,0.52,C.sand);
+    fountain.cylinder(0,0.78,0,0.66,0.10,C.ivory);
+    fountain.cylinder(0,0.85,0,0.50,0.06,C.waterLight);
+    fountain.cylinder(0,0.97,0,0.15,0.25,C.ivory);
+    snowSurfaces.add({ x:0,y:1.095,z:0,width:0.18,depth:0.18 });
   }
-  fountain.cylinder(0,0.2,0,1.12,0.035,C.water);
-  fountain.cylinder(0,0.48,0,0.30,0.52,C.sand);
-  fountain.cylinder(0,0.78,0,0.66,0.10,C.ivory);
-  fountain.cylinder(0,0.85,0,0.50,0.06,C.waterLight);
-  fountain.cylinder(0,0.97,0,0.15,0.25,C.ivory);
-  snowSurfaces.add({ x:0,y:1.095,z:0,width:0.18,depth:0.18 });
   const fountainMeshes=fountain.flush('fountain');
   // Benches, flower beds and lamps live outside the walking ring.
   for(const side of [-1,1]) {
@@ -227,5 +230,5 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const glints=meshes.filter(m=>m.metadata.baseColor==='#abdadd');
   // Leave the space beyond the modeled board empty so the scene's clear color
   // matches the surrounding UI exactly, without tone mapping a ground material.
-  return {meshes:[...meshes,...fountainMeshes],shadowCasters:[...propMeshes,...foliageMeshes,...fountainMeshes,...lamps],lamps,decor,bridge,glints,waterMeshes,isRoad,isWater,inHouse,inBuiltHouse,inEntity,groundMeshes,shoreMeshes,roadMeshes,foliageMeshes,groundTiles,waterTiles,terrainStuds,trees,snowSurfaces:snowSurfaces.items,waterSurfaces:[{x:0,y:0.218,z:0,diameter:1.12},{x:0,y:0.88,z:0,diameter:0.50}]};
+  return {meshes:[...meshes,...fountainMeshes],shadowCasters:[...propMeshes,...foliageMeshes,...fountainMeshes,...lamps],lamps,decor,bridge,glints,waterMeshes,isRoad,isWater,inHouse,inBuiltHouse,inEntity,groundMeshes,shoreMeshes,roadMeshes,foliageMeshes,groundTiles,waterTiles,terrainStuds,trees,snowSurfaces:snowSurfaces.items,waterSurfaces:layout.features?.some(feature=>feature.kind==='about')?[]:[{x:0,y:0.218,z:0,diameter:1.12},{x:0,y:0.88,z:0,diameter:0.50}]};
 }

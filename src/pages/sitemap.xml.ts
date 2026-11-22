@@ -10,6 +10,7 @@ export const GET: APIRoute = async () => {
   const { posts } = await getSiteData();
   const entries = [
     { loc: new URL('/', siteConfig.siteUrl).href, lastmod: undefined },
+    { loc: new URL('/about/', siteConfig.siteUrl).href, lastmod: undefined },
     { loc: new URL('/posts/', siteConfig.siteUrl).href, lastmod: posts[0]?.updatedAt ?? posts[0]?.date },
     ...posts.map((post) => ({
       loc: new URL(`/posts/${encodeURIComponent(post.id)}/`, siteConfig.siteUrl).href,

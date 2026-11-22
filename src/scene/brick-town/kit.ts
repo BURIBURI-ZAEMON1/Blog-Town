@@ -93,6 +93,25 @@ const simpleBox = (w: number, h: number, d: number): Geometry => {
   return geometry;
 };
 
+const rolledBoxGeometry = (w: number, h: number, d: number, roll: number): Geometry => {
+  const key = `rolled:${w}:${h}:${d}:${roll}`;
+  const cached = geometryCache.get(key); if (cached) return cached;
+  const source = simpleBox(w, h, d);
+  const cos = Math.cos(roll), sin = Math.sin(roll);
+  const positions = source.positions.slice();
+  const normals = source.normals.slice();
+  for (let i = 0; i < positions.length; i += 3) {
+    const x = positions[i], y = positions[i + 1];
+    positions[i] = x * cos - y * sin;
+    positions[i + 1] = x * sin + y * cos;
+    const nx = normals[i], ny = normals[i + 1];
+    normals[i] = nx * cos - ny * sin;
+    normals[i + 1] = nx * sin + ny * cos;
+  }
+  const geometry = { positions, normals, indices: source.indices };
+  geometryCache.set(key, geometry); return geometry;
+};
+
 export class BrickKit {
   private buckets = new Map<string, Bucket>();
   readonly materials = new Map<string, PBRMaterial>();
@@ -114,6 +133,9 @@ export class BrickKit {
   }
   box(x: number, y: number, z: number, w: number, h: number, d: number, color: string, yaw = 0, id?: string, glass = false) {
     this.add(roundedBox(w, h, d, Math.min(0.025, h * 0.16)), x, y, z, color, yaw, id, glass);
+  }
+  rolledBox(x: number, y: number, z: number, w: number, h: number, d: number, roll: number, color: string, yaw = 0, id?: string, glass = false) {
+    this.add(rolledBoxGeometry(w, h, d, roll), x, y, z, color, yaw, id, glass);
   }
   cylinder(x: number, y: number, z: number, diameter: number, height: number, color: string, id?: string, top = diameter) {
     this.add(cylinderGeometry(this.scene, diameter, height, top), x, y, z, color, 0, id);
