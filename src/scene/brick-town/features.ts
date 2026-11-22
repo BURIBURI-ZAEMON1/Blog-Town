@@ -194,7 +194,7 @@ function buildWindmill(scene: Scene, feature: TownFeature, mobile = false) {
     kit.box(0, H * 0.11 + step * H * 0.2, doorZ + 0.3 - step * 0.12, S * 1.7 + step * 0.22, H * 0.22, 0.22, C.sand, 0, id);
   }
 
-  addRotor(kit, id, lanternBaseY, coursesPerFloor);
+  const { rotor, meshes: rotorMeshes } = addRotor(scene, root, kit, id, lanternBaseY, coursesPerFloor, mobile);
 
   const signX = -w * 0.4;
   const signZ = d / 2 + 0.2;
@@ -203,11 +203,11 @@ function buildWindmill(scene: Scene, feature: TownFeature, mobile = false) {
   kit.box(signX, 1.35, signZ - 0.05, 0.68, 0.1, 0.025, C.red, 0, id);
   kit.box(signX, 1.51, signZ - 0.05, 0.42, 0.08, 0.025, C.yellow, 0, id);
 
-  const meshes = kit.flush(`feature:${feature.id}`);
+  const meshes = [...kit.flush(`feature:${feature.id}`), ...rotorMeshes];
   for (const mesh of meshes) {
     mesh.metadata = { ...mesh.metadata, postId: undefined, featureId: feature.id };
   }
-  return { root, meshes, feature, anchorY: (lanternBaseY + H * 2.5) * .62 };
+  return { root, rotor, meshes, feature, anchorY: (lanternBaseY + H * 2.5) * .62 };
 }
 
 function addShaftWindow(kit: BrickKit, id: string, size: number, floorBase: number) {
@@ -251,24 +251,17 @@ function addLanternWindows(kit: BrickKit, id: string, size: number, floorBase: n
   }
 }
 
-function addRotor(kit: BrickKit, id: string, lanternBaseY: number, coursesPerFloor: number) {
-  // The sail plane stays parallel to the tower's front facade: the rotor axis
-  // points straight out of the masonry, the way a real windmill is mounted.
-  const rotorYaw = 0;
-  const rotorSin = Math.sin(rotorYaw);
-  const rotorCos = Math.cos(rotorYaw);
-  const rotorNormalX = Math.sin(rotorYaw);
-  const rotorNormalZ = Math.cos(rotorYaw);
+function addRotor(scene: Scene, root: TransformNode, towerKit: BrickKit, id: string, lanternBaseY: number, coursesPerFloor: number, mobile: boolean) {
   const hubY = lanternBaseY + H * (coursesPerFloor * 1.1);
   const hubOut = LANTERN_WIDTH * S / 2 + 0.35;
-  const hub = { x: rotorNormalX * hubOut, y: hubY, z: rotorNormalZ * hubOut };
-  const rotorX = (u: number, front = 0) => hub.x + u * rotorCos + rotorNormalX * front;
-  const rotorZ = (u: number, front = 0) => hub.z - u * rotorSin + rotorNormalZ * front;
-
-  // Short axle ties the hub back into the lantern face.
-  kit.box(hub.x * 0.55, hub.y, hub.z * 0.55, 0.22, 0.22, hubOut * 0.95, C.brown, rotorYaw, id);
-  kit.box(hub.x, hub.y, hub.z, 0.44, 0.44, 0.26, C.brown, rotorYaw, id);
-  kit.box(hub.x + 0.07, hub.y, hub.z + 0.15, 0.22, 0.22, 0.12, C.yellow, rotorYaw, id);
+  // Keep the axle fixed; the sails turn in the facade plane around its tip.
+  towerKit.box(0, hubY, hubOut * 0.55, 0.22, 0.22, hubOut * 0.95, C.brown, 0, id);
+  const rotor = new TransformNode(`windmill-rotor:${id}`, scene);
+  rotor.parent = root;
+  rotor.position.set(0, hubY, hubOut);
+  const kit = new BrickKit(scene, rotor, 'plastic', !mobile);
+  kit.box(0, 0, 0, 0.44, 0.44, 0.26, C.brown, 0, id);
+  kit.box(0.07, 0, 0.15, 0.22, 0.22, 0.12, C.yellow, 0, id);
 
   // Pixel-stepped sail: three bands along the arm, the middle one kicked out
   // sideways so the outline breaks into a hard stair instead of a curve.
@@ -295,16 +288,17 @@ function addRotor(kit: BrickKit, id: string, lanternBaseY: number, coursesPerFlo
       const center = point((band.start + band.end) / 2, (band.leading + trailing) / 2);
 
       // Thick red frame, then the ivory sail cloth inset inside it.
-      kit.rolledBox(rotorX(center.u, 0.05), hub.y + center.v, rotorZ(center.u, 0.05), length + 0.02, width + border * 2, 0.11, roll, C.coral, rotorYaw, id);
-      kit.rolledBox(rotorX(center.u, 0.095), hub.y + center.v, rotorZ(center.u, 0.095), length - 0.03, width, 0.05, roll, C.ivory, rotorYaw, id);
+      kit.rolledBox(center.u, center.v, 0.05, length + 0.02, width + border * 2, 0.11, roll, C.coral, 0, id);
+      kit.rolledBox(center.u, center.v, 0.095, length - 0.03, width, 0.05, roll, C.ivory, 0, id);
 
       // Thin dark spar keeps the sail readable without overpowering the frame.
       const spar = point((band.start + band.end) / 2, trailing + border + 0.035);
-      kit.rolledBox(rotorX(spar.u, 0.14), hub.y + spar.v, rotorZ(spar.u, 0.14), length + 0.02, 0.045, 0.03, roll, C.navy, rotorYaw, id);
+      kit.rolledBox(spar.u, spar.v, 0.14, length + 0.02, 0.045, 0.03, roll, C.navy, 0, id);
     }
 
     // Blunt red cap closes the outer end of the arm.
     const tip = point(3.62, (0.34 + trailing) / 2);
-    kit.rolledBox(rotorX(tip.u, 0.06), hub.y + tip.v, rotorZ(tip.u, 0.06), 0.18, 0.34 + border * 2, 0.09, roll, C.red, rotorYaw, id);
+    kit.rolledBox(tip.u, tip.v, 0.06, 0.18, 0.34 + border * 2, 0.09, roll, C.red, 0, id);
   }
+  return { rotor, meshes: kit.flush(`windmill-rotor:${id}`) };
 }

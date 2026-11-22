@@ -125,6 +125,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const houses=layout.plots.map(p=>buildHouse(scene,p,mobile));
   const houseMeshes=houses.flatMap(h=>h.meshes);
   const features=(layout.features??[]).map(feature=>buildFeature(scene,feature,mobile));
+  const rotorMeshes=new Set(features.flatMap(model=>model.rotor.getChildMeshes()));
   const huts=(layout.hamlet?.huts??[]).map(hut=>buildFriendHut(scene,hut,mobile));
   const places=[
     ...features.map(model=>({...model.feature,anchorY:model.anchorY,meshes:model.meshes})),
@@ -147,7 +148,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   // multi-million-instance surface cuts most shadow-map geometry while houses,
   // trees, props and citizens retain their natural shadows.
   for(const m of [...world.shadowCasters,...houseMeshes,...placeMeshes,...seasons.meshes.filter(m=>!m.metadata.thinInstances)])shadows.addShadowCaster(m);
-  for(const m of [...world.meshes,...houseMeshes,...placeMeshes]){m.computeWorldMatrix(true);m.freezeWorldMatrix();}
+  for(const m of [...world.meshes,...houseMeshes,...placeMeshes])if(!rotorMeshes.has(m)){m.computeWorldMatrix(true);m.freezeWorldMatrix();}
   let glow:import('@babylonjs/core/Layers/glowLayer.js').GlowLayer|undefined;
   let highlights:import('@babylonjs/core/Layers/highlightLayer.js').HighlightLayer|undefined;
   let fxaa:import('@babylonjs/core/PostProcesses/fxaaPostProcess.js').FxaaPostProcess|undefined;
@@ -437,7 +438,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   scene.blockMaterialDirtyMechanism=false;
   canvas.dataset.sceneBuildMs=String(Math.round(performance.now()-buildStarted));
   const resize=new ResizeObserver(()=>{fit(true);if(state.hoveredPostId)anchor(state.hoveredPostId);});resize.observe(canvas.parentElement!);
-  let lastDiagnostics=0,slowRenderFrames=0,firstFramePublished=false;
+  let lastDiagnostics=0,slowRenderFrames=0,firstFramePublished=false,lastRotorShadow=0;
   let edgeHighlightSignature='';
   const edgeTransform=Matrix.Zero();
   let edgeZoom=zoom,edgeInitialized=false,edgeWasReduced=state.reducedMotion;
@@ -496,7 +497,12 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsPrecipitating(layout.seed,slot);populate();lighting();}
     if(Math.abs(Date.now()-lightClock)>=1000)lighting();
     else if(light!==lightTarget&&(now-lastLightAt>=100||now>=lightUntil))applyLighting(now);
-    if(!state.reducedMotion)tickLife(citizens,dt,layout);
+    if(!state.reducedMotion){
+      tickLife(citizens,dt,layout);
+      for(const model of features)model.rotor.rotation.z=(model.rotor.rotation.z+dt*Math.PI/22.5)%(Math.PI*2);
+      // Refresh moving sail shadows four times a second, retaining the town cache.
+      if(features.length&&now-lastRotorShadow>=250){shadows.getShadowMap()?.resetRefreshCounter();lastRotorShadow=now;}
+    }
     citizens.forEach((p,i)=>{
       const f=figures[i];f.root.position.set(p.position.x,0.10,p.position.z);
       // Raised bridge follows its real deck, with short ramps at both ends.

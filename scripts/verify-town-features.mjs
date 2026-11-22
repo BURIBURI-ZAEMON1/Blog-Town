@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import ts from 'typescript';
-import { NullEngine, Scene } from '@babylonjs/core';
+import { NullEngine, Scene, Vector3 } from '@babylonjs/core';
 const require = createRequire(import.meta.url), cache = new Map();
 function load(path) {
   const absolute = resolve(path);
@@ -73,6 +73,21 @@ for (const model of [buildFeature(scene, layout.features[0]), buildFriendHut(sce
   assert(model.meshes.every(mesh => mesh.getVerticesData('edgeAnchor').every(value => value === 0)), 'parented landmark edge anchor is not local');
   model.root.dispose();
 }
+const windmill = buildFeature(scene, layout.features[0]);
+const sail = windmill.rotor.getChildMeshes().find(mesh => mesh.getBoundingInfo().boundingBox.extendSize.length() > 1);
+const tower = windmill.meshes.find(mesh => mesh.parent === windmill.root);
+const vertex = Vector3.FromArray(sail.getVerticesData('position'));
+const before = Vector3.TransformCoordinates(vertex, sail.computeWorldMatrix(true));
+const pivot = windmill.rotor.getAbsolutePosition().clone();
+const towerBefore = tower.computeWorldMatrix(true).clone();
+windmill.rotor.rotation.z = Math.PI / 6;
+const after = Vector3.TransformCoordinates(vertex, sail.computeWorldMatrix(true));
+assert(Vector3.Distance(before, after) > .01, 'sail vertices did not rotate');
+assert(Math.abs(Vector3.Distance(before, pivot) - Vector3.Distance(after, pivot)) < 1e-5, 'sails drifted away from their axle');
+assert(Math.abs(before.z - after.z) < 1e-5, 'sails left the facade plane');
+assert(tower.computeWorldMatrix(true).equals(towerBefore), 'turning sails moved the tower');
+assert(windmill.rotor.getChildMeshes().every(mesh => mesh.isPickable && mesh.metadata.featureId === 'about'), 'rotating sails lost About picking');
+windmill.root.dispose();
 scene.dispose(); engine.dispose();
 assert.equal(createSiteStats([], new Date('2026-11-22')).days, undefined);
 assert.equal(createSiteStats([{ date: '2026-11-20', category: 'a', tags: ['x'], wordCount: 120 }], new Date('2026-11-22')).days, 3);
