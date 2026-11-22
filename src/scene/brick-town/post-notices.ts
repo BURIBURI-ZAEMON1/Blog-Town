@@ -4,6 +4,7 @@ import type { Scene } from '@babylonjs/core/scene.js';
 import type { PostNoticeFrame } from '../../data/town-post-notices';
 import type { buildHouse } from './buildings';
 import { FLOOR_HEIGHT, GROUND_Y } from './buildings';
+import { townEdgeState, worldEdgeVisibility } from './edge-reveal';
 
 const NO_IDS: readonly string[] = [];
 
@@ -16,11 +17,14 @@ export function createPostNoticeProjector(scene: Scene, camera: Camera, houses: 
   });
   const lastTransform = Matrix.Zero();
   let lastIds: readonly string[] | undefined, lastGuideId: string | undefined, lastWidth = -1, lastHeight = -1;
+  let lastEdge = -1;
   return {
     /** Call after scene.render(), when Babylon has updated the camera transform. */
     project(ids: readonly string[] = NO_IDS, guidePostId: string | undefined, width: number, height: number): PostNoticeFrame | undefined {
       const transform = scene.getTransformMatrix();
-      if (ids === lastIds && guidePostId === lastGuideId && width === lastWidth && height === lastHeight && ((!ids.length && !guidePostId) || transform.equals(lastTransform))) return;
+      const edge = townEdgeState(scene).field.revision;
+      if (edge === lastEdge && ids === lastIds && guidePostId === lastGuideId && width === lastWidth && height === lastHeight && ((!ids.length && !guidePostId) || transform.equals(lastTransform))) return;
+      lastEdge = edge;
       lastIds = ids; lastGuideId = guidePostId; lastWidth = width; lastHeight = height; lastTransform.copyFrom(transform);
       const viewport = camera.viewport.toGlobal(width, height);
       const anchors: PostNoticeFrame['anchors'] = [];
@@ -28,6 +32,7 @@ export function createPostNoticeProjector(scene: Scene, camera: Camera, houses: 
       for (const postId of noticeIds) {
         const point = points.get(postId);
         if (!point) continue;
+        if (worldEdgeVisibility(scene,point.x,0,point.z)<.99) continue;
         const p = Vector3.Project(point, Matrix.IdentityReadOnly, transform, viewport);
         if (p.z >= 0 && p.z <= 1 && p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height) {
           anchors.push({ postId, kind: postId === guidePostId ? 'guide' : 'new', x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100 });

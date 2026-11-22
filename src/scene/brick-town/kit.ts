@@ -7,6 +7,8 @@ import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial.js';
 import type { Scene } from '@babylonjs/core/scene.js';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData.js';
+import { TownEdgeMaterial } from './edge-reveal';
+import { edgeCell } from '../../data/town-outline';
 
 export const STUD = 0.36;
 export const COURSE = 0.216;
@@ -19,8 +21,8 @@ export const COLORS = {
   road: '#bcb4a0', roadLight: '#d5cbb5', yellow: '#efba36', black: '#242b2b',
 };
 type Geometry = { positions: number[]; normals: number[]; indices: number[] };
-type Bucket = Geometry & { color: string; id?: string; glass: boolean };
-type ThinBucket = { geometry: Geometry; color: string; glass: boolean; matrices: number[] };
+type Bucket = Geometry & { color: string; id?: string; glass: boolean; anchors: number[] };
+type ThinBucket = { geometry: Geometry; color: string; glass: boolean; matrices: number[]; anchors: number[] };
 const geometryCache = new Map<string, Geometry>();
 const sceneMaterials = new WeakMap<Scene, Map<string, PBRMaterial>>();
 
@@ -35,6 +37,7 @@ const materialFor = (scene: Scene, color: string, glass: boolean, group: string)
     material.roughness = glass ? 0.15 : 0.29;
     material.clearCoat.isEnabled = true; material.clearCoat.intensity = 0.25; material.clearCoat.roughness = 0.21;
     material.environmentIntensity = 0.7;
+    new TownEdgeMaterial(material, scene);
     if (glass) material.alpha = 0.86;
     cache.set(key, material);
   }
@@ -94,16 +97,18 @@ export class BrickKit {
   private buckets = new Map<string, Bucket>();
   readonly materials = new Map<string, PBRMaterial>();
   readonly meshes: Mesh[] = [];
+  anchor?: { x: number; z: number };
   constructor(readonly scene: Scene, readonly parent?: TransformNode, readonly materialGroup = 'plastic', readonly studsEnabled = true) {}
   private add(geometry: Geometry, x: number, y: number, z: number, color: string, yaw = 0, id?: string, glass = false) {
     const key = `${color}:${id ?? ''}:${glass}`;
     let bucket = this.buckets.get(key);
-    if (!bucket) { bucket = { positions: [], normals: [], indices: [], color, id, glass }; this.buckets.set(key, bucket); }
+    if (!bucket) { bucket = { positions: [], normals: [], indices: [], color, id, glass, anchors: [] }; this.buckets.set(key, bucket); }
     const base = bucket.positions.length / 3, c = Math.cos(yaw), s = Math.sin(yaw);
     for (let i = 0; i < geometry.positions.length; i += 3) {
       const p = geometry.positions, n = geometry.normals;
       bucket.positions.push(x + c * p[i] + s * p[i + 2], y + p[i + 1], z - s * p[i] + c * p[i + 2]);
       bucket.normals.push(c * n[i] + s * n[i + 2], n[i + 1], -s * n[i] + c * n[i + 2]);
+      bucket.anchors.push(this.anchor?.x ?? (this.parent ? 0 : edgeCell(x)), this.anchor?.z ?? (this.parent ? 0 : edgeCell(z)));
     }
     for (const index of geometry.indices) bucket.indices.push(base + index);
   }
@@ -123,6 +128,7 @@ export class BrickKit {
     for (const [key, bucket] of this.buckets) {
       const mesh = new Mesh(`${name}:${key}`, this.scene);
       const data = new VertexData(); data.positions = bucket.positions; data.normals = bucket.normals; data.indices = bucket.indices; data.applyToMesh(mesh);
+      mesh.setVerticesData('edgeAnchor', bucket.anchors, false, 2);
       const mat = materialFor(this.scene, bucket.color, bucket.glass, this.materialGroup);
       mesh.material = mat; mesh.parent = this.parent ?? null; mesh.receiveShadows = true;
       mesh.isPickable = true; mesh.metadata = { postId: bucket.id, plastic: true, glass: bucket.glass, baseColor: bucket.color };
@@ -139,18 +145,21 @@ export class BrickKit {
 export class ThinBrickKit {
   private buckets = new Map<string, ThinBucket>();
   readonly meshes: Mesh[] = [];
-  constructor(readonly scene: Scene, readonly materialGroup = 'plastic') {}
+  anchor?: { x: number; z: number };
+  constructor(readonly scene: Scene, readonly materialGroup = 'plastic', private readonly beveled = false) {}
   private add(key: string, geometry: Geometry, x: number, y: number, z: number, color: string, yaw = 0, glass = false) {
     const bucketKey = `${key}:${color}:${glass}`;
     let bucket = this.buckets.get(bucketKey);
-    if (!bucket) { bucket = { geometry, color, glass, matrices: [] }; this.buckets.set(bucketKey, bucket); }
+    if (!bucket) { bucket = { geometry, color, glass, matrices: [], anchors: [] }; this.buckets.set(bucketKey, bucket); }
     // These instances only rotate around Y and translate. Write the same column-
     // major matrix directly instead of allocating a Babylon Matrix per stud.
     const c = Math.cos(yaw), s = Math.sin(yaw);
     bucket.matrices.push(c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, x, y, z, 1);
+    bucket.anchors.push(this.anchor?.x ?? edgeCell(x), this.anchor?.z ?? edgeCell(z));
   }
   box(x: number, y: number, z: number, w: number, h: number, d: number, color: string, yaw = 0, glass = false) {
-    this.add(`simple:${w}:${h}:${d}`, simpleBox(w, h, d), x, y, z, color, yaw, glass);
+    const shape = this.beveled ? roundedBox(w, h, d, Math.min(.025, h * .16)) : simpleBox(w, h, d);
+    this.add(`box:${w}:${h}:${d}`, shape, x, y, z, color, yaw, glass);
   }
   cylinder(x: number, y: number, z: number, diameter: number, height: number, color: string, top = diameter) {
     this.add(`c:${diameter}:${height}:${top}:8`, cylinderGeometry(this.scene, diameter, height, top, 8), x, y, z, color);
@@ -167,6 +176,7 @@ export class ThinBrickKit {
       const data = new VertexData(); data.positions = bucket.geometry.positions; data.normals = bucket.geometry.normals; data.indices = bucket.geometry.indices; data.applyToMesh(mesh);
       mesh.material = materialFor(this.scene, bucket.color, bucket.glass, this.materialGroup);
       mesh.thinInstanceSetBuffer('matrix', new Float32Array(bucket.matrices), 16, true);
+      mesh.thinInstanceSetBuffer('edgeAnchor', new Float32Array(bucket.anchors), 2, true);
       // thinInstanceSetBuffer already refreshes the full bounds.
       mesh.receiveShadows = true; mesh.isPickable = false; mesh.alwaysSelectAsActiveMesh = true;
       mesh.metadata = { plastic: true, glass: bucket.glass, baseColor: bucket.color, thinInstances: bucket.matrices.length / 16 };

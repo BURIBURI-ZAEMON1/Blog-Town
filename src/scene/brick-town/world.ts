@@ -6,6 +6,7 @@ import { makeThiefArrivalRoute } from '../../data/town-life';
 import { SnowSurfaces } from './surfaces';
 import { createPathProximity } from './path-proximity';
 import { BrickKit, ThinBrickKit, STUD as S, COLORS as C, COURSE as H } from './kit';
+import { townTerrainBounds, inTownOutline, extendTownPath } from '../../data/town-outline';
 
 export const BOARD = townBoard;
 export function randomFor(seed: string) {
@@ -16,12 +17,13 @@ export function randomFor(seed: string) {
 export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const kit = new BrickKit(scene), terrain = new ThinBrickKit(scene, 'terrain-ground'), rand = randomFor(layout.seed);
   const shore = new ThinBrickKit(scene, 'terrain-shore'), paving = new ThinBrickKit(scene, 'terrain-road');
-  const water = new ThinBrickKit(scene, 'terrain-water'), foliage = new BrickKit(scene, undefined, 'foliage');
+  const water = new ThinBrickKit(scene, 'terrain-water'), foliage = new ThinBrickKit(scene, 'foliage', true);
+  const treePicking = new BrickKit(scene, undefined, 'foliage');
   const snowSurfaces = new SnowSurfaces();
   const groundTiles: Point[] = [], waterTiles: Point[] = [], trees: { x: number; z: number; size: number }[] = [];
   const terrainStuds = mobile ? 3 : 2;
-  const roads = Object.entries(roadCenterlines).map(([key, path]) => ({ near: createPathProximity(samplePath(path, 12)), width: roadWidths[key as keyof typeof roadWidths] }));
-  const nearRiver = createPathProximity(samplePath(riverCenterline, 12));
+  const roads = Object.entries(roadCenterlines).map(([key, path]) => ({ near: createPathProximity(samplePath(extendTownPath(path, key === 'main'), 12)), width: roadWidths[key as keyof typeof roadWidths] }));
+  const nearRiver = createPathProximity(samplePath(extendTownPath(riverCenterline), 12));
   const reserved = layout.reservedPlots ?? layout.plots;
   const access = layout.plots.map(plot=>createPathProximity(makeThiefArrivalRoute(plot,townTravelRoutes,samplePath,layout.plots)));
   const isRoad = (p: Point, clearance = 0) => access.some(near=>near(p,0.30+clearance))||roads.some(r => r.near(p,r.width / 2 + clearance)) || Math.hypot(p.x,p.z) < townCenterRoundaboutRadius + clearance;
@@ -29,12 +31,9 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   const inBuiltHouse = (p:Point,clearance=0)=>layout.plots.some(b=>Math.abs(p.x-b.x)<b.width/2+clearance&&Math.abs(p.z-b.z)<b.depth/2+clearance);
   const inEntity = (p:Point,clearance=0)=>layout.entities.some(e=>Math.abs(p.x-e.x)<e.width/2+clearance&&Math.abs(p.z-e.z)<e.depth/2+clearance);
   const isWater = (p: Point, clearance = 0) => nearRiver(p,riverWidth/2+clearance);
-  const width = BOARD.maxX - BOARD.minX, depth = BOARD.maxZ - BOARD.minZ;
-  const centerX = (BOARD.maxX+BOARD.minX)/2;
-  // The diorama has actual thickness and two moulded layers, not a vast flat plane.
-  kit.box(centerX,-0.53,0,width+0.2,0.48,depth+0.2,C.dark);
-  kit.box(centerX,-0.24,0,width,0.12,depth,C.sand);
-  kit.box(centerX,-0.10,0,width,0.16,depth,C.pine);
+  const bounds = townTerrainBounds;
+  const width = bounds.maxX - bounds.minX, depth = bounds.maxZ - bounds.minZ;
+  const foundation = new ThinBrickKit(scene, 'terrain-foundation');
   const greens = [C.green, C.green, C.green, C.moss, C.leaf];
   // Keep the bridge as the only intentional road-over-water crossing. The
   // road network still reserves the full corridor for layout/citizens, but
@@ -48,8 +47,14 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
     return Math.abs(along) <= 2.2 + clearance && Math.abs(across) <= roadWidths.west / 2 + 0.16 + clearance;
   };
   // Tile masks, picking, navigation and building occupation all use world X/Z.
-  for (let x = BOARD.minX+S; x < BOARD.maxX; x+=S*terrainStuds) for (let z=BOARD.minZ+S;z<BOARD.maxZ;z+=S*terrainStuds) {
+  for (let x = bounds.minX+S; x < bounds.maxX; x+=S*terrainStuds) for (let z=bounds.minZ+S;z<bounds.maxZ;z+=S*terrainStuds) {
+    if (!inTownOutline({ x,z })) continue;
+    const tileSize = S * terrainStuds;
+    // The same footprint supports land, roads and water, including the new fringe.
+    const houseBase = layout.plots.find(plot => Math.abs(x-plot.x)<plot.width/2+.35&&Math.abs(z-plot.z)<plot.depth/2+.35);
+    for (const batch of [terrain, shore, paving, water, foundation]) batch.anchor = houseBase ?? { x,z };
     const p = {x,z}, road = isRoad(p), wet = isWater(p), house = inHouse(p,0.2);
+    foundation.box(x,wet&&!isBridgeDeck(p,.08)?-.42:-.32,z,tileSize,.60,tileSize,C.pine);
     if (wet && !isBridgeDeck(p,0.08)) {
       waterTiles.push(p);
       water.brick(x,-0.10,z,terrainStuds,terrainStuds,rand()<0.25?C.waterLight:rand()<0.5?C.water:C.waterDeep,H/3,false);
@@ -127,6 +132,10 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
     && !inEntity(p, radius + 0.08) && Math.hypot(p.x,p.z)>3.2
     && !decor.some(t=>Math.hypot(t.x-p.x,t.z-p.z)<t.radius+radius+gap);
   function tree(x:number,z:number,size:number,autumn:boolean) {
+    kit.anchor = foliage.anchor = { x,z };
+    // One invisible crown hull keeps tree occlusion without ray-testing every leaf instance.
+    treePicking.anchor = { x,z };
+    treePicking.box(x,.97,z,1.44*size,1.6,1.44*size,C.leaf);
     const leaf=autumn?C.yellow:C.leaf, shade=autumn?C.coral:C.pine;
     trees.push({ x,z,size });
     const crown = new SnowSurfaces();
@@ -142,13 +151,14 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
     }
     foliage.brick(x,1.5,z,1,1,leaf,H,true);
     crown.column({ x,y:1.5+H+0.025,z,width:S-0.01,depth:S-0.01 });
-    snowSurfaces.items.push(...crown.items);
+    snowSurfaces.items.push(...crown.items.map(surface => ({ ...surface, anchor: { x,z } })));
+    kit.anchor = foliage.anchor = undefined;
   }
   let attempts=0;
-  while(decor.filter(item=>item.radius>=0.6).length<(mobile ? 96 : 150)&&attempts++<9000) {
-    const x=BOARD.minX+1+rand()*(width-2),z=BOARD.minZ+1+rand()*(depth-2),p={x,z};
+  while(decor.filter(item=>item.radius>=0.6).length<(mobile ? 140 : 220)&&attempts++<14000) {
+    const x=bounds.minX+1+rand()*(width-2),z=bounds.minZ+1+rand()*(depth-2),p={x,z};
     const radius=0.72;
-    if(!canPlaceDecor(p,radius,0.22))continue;
+    if(!inTownOutline(p,radius+.4)||!canPlaceDecor(p,radius,0.22))continue;
     const inForest=layout.regions.some(r=>r.kind==='forest'&&pointInPolygon(p,r.polygon));
     if(!inForest&&rand()>0.38)continue;
     decor.push({x,z,radius});tree(x,z,0.95+rand()*0.12,rand()<0.16);
@@ -157,6 +167,7 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   // expanded green field without introducing unrelated clickable buildings.
   const accentColors=[C.coral,C.red,C.blue,C.teal,C.yellow,C.cream,C.navy];
   const placeAccent=(x:number,z:number,index:number) => {
+    kit.anchor = { x,z };
     const accent=accentColors[index%accentColors.length];
     if(index%3===0) {
       kit.brick(x,0.06,z,1,1,C.green,H/3,false);
@@ -170,12 +181,13 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
       kit.brick(x,0.07,z,1,1,accent,H/3,false);
       kit.box(x,0.31,z,0.18,0.17,0.18,index%2?C.ivory:C.yellow);
     }
+    kit.anchor = undefined;
   };
   let accentAttempts=0, accentsPlaced=0;
-  while(accentsPlaced<(mobile ? 108 : 170)&&accentAttempts++<14000) {
-    const x=BOARD.minX+0.7+rand()*(width-1.4),z=BOARD.minZ+0.7+rand()*(depth-1.4),p={x,z};
+  while(accentsPlaced<(mobile ? 155 : 250)&&accentAttempts++<20000) {
+    const x=bounds.minX+0.7+rand()*(width-1.4),z=bounds.minZ+0.7+rand()*(depth-1.4),p={x,z};
     const radius=0.27;
-    if(!canPlaceDecor(p,radius,0.10))continue;
+    if(!inTownOutline(p,radius+.4)||!canPlaceDecor(p,radius,0.10))continue;
     decor.push({x,z,radius});placeAccent(x,z,accentsPlaced++);
   }
   for(const e of layout.entities.filter(e=>e.kind==='fence')) {
@@ -205,9 +217,11 @@ export function buildWorld(scene: Scene, layout: TownLayout, mobile = false) {
   // overlay, so trees and small props can naturally sit between them.
   const groundMeshes=terrain.flush('terrain'), shoreMeshes=shore.flush('shore'), roadMeshes=paving.flush('road');
   const riverMeshes=water.flush('water'), foliageMeshes=foliage.flush('foliage');
-  const terrainMeshes=[...groundMeshes,...shoreMeshes,...roadMeshes,...riverMeshes];
+  const terrainMeshes=[...foundation.flush('foundation'),...groundMeshes,...shoreMeshes,...roadMeshes,...riverMeshes];
   const propMeshes=kit.flush('world');
-  const meshes=[...terrainMeshes,...propMeshes,...foliageMeshes];
+  const treePickMeshes=treePicking.flush('tree-picking');
+  for(const mesh of treePickMeshes)mesh.visibility=0;
+  const meshes=[...terrainMeshes,...propMeshes,...foliageMeshes,...treePickMeshes];
   const waterMeshes=[...meshes,...fountainMeshes].filter(m=>[C.water,C.waterLight,C.waterDeep].includes(m.metadata.baseColor));
   for(const m of waterMeshes){const mat=m.material as PBRMaterial;mat.roughness=0.13;mat.metallic=0.08;mat.clearCoat.intensity=0.7;}
   const glints=meshes.filter(m=>m.metadata.baseColor==='#abdadd');

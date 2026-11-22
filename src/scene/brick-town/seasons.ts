@@ -2,7 +2,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color.js';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh.js';
 import type { Scene } from '@babylonjs/core/scene.js';
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial.js';
-import { townBoard } from '../../data/town-layout';
+import { inTownOutline } from '../../data/town-outline';
 import { SEASON_PROFILES, type Season, type SeasonProfile } from '../../data/town-seasons';
 import { BrickKit, ThinBrickKit, COLORS as C, STUD as S } from './kit';
 import type { buildWorld } from './world';
@@ -37,7 +37,7 @@ function scatter(context: OverlayContext, count: number, clustered: boolean) {
       if (!tile) break;
       x = tile.x + (random() - 0.5) * 0.3; z = tile.z + (random() - 0.5) * 0.3;
     }
-    if(x<townBoard.minX+0.4||x>townBoard.maxX-0.4||z<townBoard.minZ+0.4||z>townBoard.maxZ-0.4)continue;
+    if(!inTownOutline({ x,z },.4))continue;
     const p = { x,z }, radius = clustered ? 0.15 : 0.26;
     if (world.isRoad(p,radius+0.12) || world.isWater(p,radius+0.18) || world.inHouse(p,radius+0.1) || world.inEntity(p,radius+0.1)) continue;
     if (world.decor.some(item=>Math.hypot(item.x-x,item.z-z)<item.radius+radius*0.6)) continue;
@@ -51,6 +51,7 @@ function flowers(context: OverlayContext, profile: SeasonProfile): Overlay {
   const kit = new ThinBrickKit(context.scene, 'season-flowers');
   const points = scatter(context, context.mobile ? 360 : 960, false);
   for (const p of points) {
+    kit.anchor = p;
     const petal=profile.palette.flower[p.variant%profile.palette.flower.length];
     kit.cylinder(p.x,0.23,p.z,0.06,0.22,C.leaf);
     kit.box(p.x,0.34,p.z,0.31,0.07,0.13,petal);
@@ -65,6 +66,7 @@ function leaves(context: OverlayContext, profile: SeasonProfile): Overlay {
   const kit = new ThinBrickKit(context.scene, 'season-leaves');
   const points = scatter(context,context.mobile ? 480 : 1400,true);
   for(const p of points) {
+    kit.anchor = p;
     kit.box(p.x,0.16,p.z,0.22,0.045,0.13,profile.palette.leaves[p.variant%profile.palette.leaves.length],p.variant*0.73);
     if(p.variant===0)kit.box(p.x+0.09,0.18,p.z+0.08,0.17,0.04,0.10,profile.palette.leaves[1],-0.45);
   }
@@ -88,6 +90,7 @@ function snow(context: OverlayContext, profile: SeasonProfile): Overlay {
   const kits = new Map<SnowSurface['parent'],BrickKit>();
   for(const surface of context.surfaces) {
     if(!surface.parent) {
+      worldSnow.anchor = surface.anchor;
       worldSnow.box(surface.x,surface.y+0.035,surface.z,surface.width,0.075,surface.depth,profile.palette.snow,surface.yaw??0);
       continue;
     }

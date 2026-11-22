@@ -7,6 +7,7 @@ export type SnowSurface = {
   yaw?: number;
   parent?: TransformNode;
   postId?: string;
+  anchor?: { x: number; z: number };
 };
 
 export class SnowSurfaces {

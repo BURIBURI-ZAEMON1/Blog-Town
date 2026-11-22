@@ -6,6 +6,7 @@ import type { Scene } from '@babylonjs/core/scene.js';
 import { createPrecipitationField, type Precipitation } from '../../data/town-weather';
 import { townBoard } from '../../data/town-layout';
 import { randomFor } from './random';
+import { worldEdgeVisibility } from './edge-reveal';
 
 /** One precipitation lifecycle, with separate rain/snow shape and movement strategies. */
 export function createWeatherController(scene:Scene,seed:string,mobile:boolean) {
@@ -17,17 +18,18 @@ export function createWeatherController(scene:Scene,seed:string,mobile:boolean) 
   function writePositions() {
     for(let i=0;i<drops.length;i++) {
       const d=drops[i];
+      const y = worldEdgeVisibility(scene,d.x,0,d.z) < .5 ? -30 : d.y;
       if(kind==='rain') {
         const o=i*6;
-        positions[o]=d.x;positions[o+1]=d.y;positions[o+2]=d.z;
-        positions[o+3]=d.x-0.12;positions[o+4]=d.y-0.65;positions[o+5]=d.z-0.04;
+        positions[o]=d.x;positions[o+1]=y;positions[o+2]=d.z;
+        positions[o+3]=d.x-0.12;positions[o+4]=y-0.65;positions[o+5]=d.z-0.04;
       } else {
         const o=i*12,x=d.x+Math.sin(elapsed*0.65+i)*0.38,z=d.z+Math.cos(elapsed*0.45+i)*0.2;
         const size=0.045+(i%3)*0.018;
-        positions[o]=x-size;positions[o+1]=d.y-size;positions[o+2]=z;
-        positions[o+3]=x+size;positions[o+4]=d.y+size;positions[o+5]=z;
-        positions[o+6]=x-size;positions[o+7]=d.y+size;positions[o+8]=z;
-        positions[o+9]=x+size;positions[o+10]=d.y-size;positions[o+11]=z;
+        positions[o]=x-size;positions[o+1]=y-size;positions[o+2]=z;
+        positions[o+3]=x+size;positions[o+4]=y+size;positions[o+5]=z;
+        positions[o+6]=x-size;positions[o+7]=y+size;positions[o+8]=z;
+        positions[o+9]=x+size;positions[o+10]=y-size;positions[o+11]=z;
       }
     }
   }
