@@ -93,23 +93,24 @@ assert.equal(createSiteStats([], new Date('2026-11-22')).days, undefined);
 assert.equal(createSiteStats([{ date: '2026-11-20', category: 'a', tags: ['x'], wordCount: 120 }], new Date('2026-11-22')).days, 3);
 
 const savedWindow = globalThis.window, savedFetch = globalThis.fetch;
-const storage = new Map(), requests = [], visitors = new Set(), readers = new Map();
-let sitePv = 0, nextIdentity = 0, failure;
+const storage = new Map(), session = new Map(), requests = [], visitors = new Set(), readers = new Map();
+let sitePv = 0, clientIdentity = 'visitor-1', failure;
 globalThis.window = {
   location: { origin: 'http://localhost:4325', pathname: '/posts/a/' },
   localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
+  sessionStorage: { getItem: key => session.get(key) ?? null, setItem: (key, value) => session.set(key, value) },
 };
 globalThis.fetch = async (url, options) => {
   const headers = new Headers(options.headers);
   requests.push({ url, options, headers });
   if (failure instanceof Error) throw failure;
   if (failure) return { ok: true, headers: new Headers(), json: async () => failure };
-  const identity = headers.get('Authorization')?.replace('Bearer ', '') ?? `visitor-${++nextIdentity}`;
+  const identity = headers.get('Authorization')?.replace('Bearer ', '') ?? clientIdentity;
   const path = new URL(headers.get('x-bsz-referer')).pathname;
-  visitors.add(identity);
   if (!readers.has(path)) readers.set(path, new Set());
-  readers.get(path).add(identity);
-  return { ok: true, headers: new Headers({ 'Set-Bsz-Identity': identity }), json: async () => ({ success: true, data: { page_pv: 99, page_uv: readers.get(path).size, site_pv: ++sitePv, site_uv: visitors.size } }) };
+  if (options.method === 'POST') { visitors.add(identity); readers.get(path).add(identity); sitePv++; }
+  const data = { page_pv: 99, page_uv: readers.get(path).size, site_pv: sitePv, site_uv: visitors.size };
+  return { ok: true, headers: new Headers({ 'Set-Bsz-Identity': identity }), json: async () => ({ success: true, data }) };
 };
 const freshCounter = () => { cache.delete(resolve('src/lib/views.ts')); return load('src/lib/views.ts').recordView; };
 try {
@@ -122,7 +123,7 @@ try {
   assert.deepEqual(await first, { readers: 1, totals: { pageviews: 1, visitors: 1 } });
   assert.deepEqual(await duplicate, await first);
   assert.equal(requests.length, 1, 'duplicate effects counted the same page twice');
-  assert.equal(new URL(requests[0].url).origin, 'https://busuanzi.9420.ltd');
+  assert.equal(new URL(requests[0].url).origin, 'https://bsz.dusays.com');
   assert.equal(requests[0].options.credentials, 'omit', 'counter still relies on third-party cookies');
   assert.equal(requests[0].headers.get('x-bsz-referer'), `${window.location.origin}/posts/a/`);
   assert.deepEqual(await recordView('/posts/a/'), await first);
@@ -135,12 +136,14 @@ try {
   assert.deepEqual(await back, { readers: 1, totals: { pageviews: 3, visitors: 1 } });
   assert.deepEqual(await other, { readers: 1, totals: { pageviews: 4, visitors: 1 } });
   assert(requests.slice(1).every(request => request.headers.get('Authorization') === 'Bearer visitor-1'), 'rapid route changes raced visitor identity');
+  assert.deepEqual(load('src/lib/views.ts').getCachedView('/posts/a/'), await back, 'completed article counts were not cached');
   const originalIdentity = new Map(storage);
-  storage.clear(); recordView = freshCounter(); window.location.pathname = '/posts/a/';
+  storage.clear(); clientIdentity = 'visitor-2'; recordView = freshCounter(); window.location.pathname = '/posts/a/';
   assert.deepEqual(await recordView('/posts/a/'), { readers: 2, totals: { pageviews: 5, visitors: 2 } });
   assert.equal(readers.get('/posts/b/').size, 1, 'another article inherited the site visitor total');
   storage.clear(); for (const [key, value] of originalIdentity) storage.set(key, value);
   recordView = freshCounter();
+  assert.equal(load('src/lib/views.ts').getCachedView('/posts/a/').readers, 2, 'reload lost the session cache');
   assert.deepEqual(await recordView('/posts/a/'), { readers: 2, totals: { pageviews: 6, visitors: 2 } }, 'reload lost the stored visitor identity');
 
   for (const payload of [{ success: false }, { success: true, data: {} }, { success: true, data: { page_uv: -1, site_pv: 2, site_uv: 1 } }, { success: true, data: { page_uv: '1', site_pv: 2, site_uv: 1 } }, { success: true, data: { page_pv: 41, site_pv: 2, site_uv: 1 } }, new Error('offline'), new DOMException('timeout', 'TimeoutError')]) {
@@ -154,6 +157,40 @@ try {
   const noStorageFirst = await recordView('/posts/a/');
   window.location.pathname = '/posts/b/';
   assert.equal((await recordView('/posts/b/')).totals.visitors, noStorageFirst.totals.visitors, 'blocked storage lost the in-memory identity');
+  const normalFetch = globalThis.fetch;
+  const beforeLostResponse = sitePv;
+  globalThis.fetch = async (url, options) => {
+    const response = await normalFetch(url, options);
+    if (options.method === 'POST') throw new DOMException('response lost after counting', 'TimeoutError');
+    return response;
+  };
+  recordView = freshCounter();
+  const recovered = await recordView('/posts/b/');
+  assert.equal(recovered.totals.pageviews, beforeLostResponse + 1, 'read recovery counted a lost POST twice');
+  assert.deepEqual(requests.slice(-2).map(request => request.options.method), ['POST', 'GET']);
+  globalThis.fetch = normalFetch;
+
+  let releaseSlow;
+  const startedPaths = [];
+  globalThis.fetch = async (url, options) => {
+    const path = new URL(options.headers['x-bsz-referer']).pathname;
+    startedPaths.push(path);
+    if (path === '/posts/slow/') await new Promise(resolve => { releaseSlow = resolve; });
+    return normalFetch(url, options);
+  };
+  recordView = freshCounter();
+  window.location.pathname = '/posts/slow/'; const slow = recordView('/posts/slow/');
+  window.location.pathname = '/posts/current/'; const current = recordView('/posts/current/');
+  assert.deepEqual(startedPaths, ['/posts/slow/', '/posts/current/'], 'a slow previous page blocked the current article');
+  assert(await current, 'current article waited for the slow request');
+  releaseSlow(); await slow;
+  globalThis.fetch = normalFetch;
+
+  const cacheKey = [...session.keys()].find(key => key.endsWith('/posts/a/'));
+  session.set(cacheKey, '{broken'); freshCounter();
+  assert.equal(load('src/lib/views.ts').getCachedView('/posts/a/'), undefined, 'corrupt cache was displayed');
+  session.set(cacheKey, JSON.stringify({ readers: -1, totals: { pageviews: 1, visitors: 1 } })); freshCounter();
+  assert.equal(load('src/lib/views.ts').getCachedView('/posts/a/'), undefined, 'invalid cache counts were displayed');
 } finally {
   if (savedWindow === undefined) delete globalThis.window; else globalThis.window = savedWindow;
   globalThis.fetch = savedFetch;
