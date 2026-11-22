@@ -12,6 +12,7 @@ import { shadowMapPixelShader } from '@babylonjs/core/Shaders/shadowMap.fragment
 // A shared world grid keeps whole objects and their supporting plates together,
 // without splitting the existing merged meshes or thin-instance batches.
 const CELL = .72, WIDTH = 160, HEIGHT = 128, COUNT = WIDTH * HEIGHT;
+const MOTION_SECONDS = .26;
 const gridIndex = (x: number, z: number) => Math.max(0, Math.min(HEIGHT - 1, Math.floor(z / CELL + HEIGHT / 2 + .5))) * WIDTH
   + Math.max(0, Math.min(WIDTH - 1, Math.floor(x / CELL + WIDTH / 2 + .5)));
 const ease = (t: number) => 1 - (1 - t) ** 3;
@@ -58,6 +59,7 @@ export class TownEdgeField {
     }
   }
   retarget(matrix: ArrayLike<number>, inset: number, retract: boolean, immediate: boolean, initial = false, landing = false) {
+    const entering: number[] = [];
     for (let i = 0; i < COUNT; i++) {
       if (this.owners[i] !== i) continue;
       const x = (i % WIDTH - WIDTH / 2) * CELL, z = (Math.floor(i / WIDTH) - HEIGHT / 2) * CELL;
@@ -69,14 +71,22 @@ export class TownEdgeField {
       if (immediate) {
         this.progress[i] = this.targets[i] = target; this.heights[i] = 0; this.active.delete(i);
       } else if (target !== this.targets[i]) {
-        // Approaching withdraws the outer plates after their landing; pulling
-        // back reveals those same plates, using one footprint in both directions.
-        this.pulses[i] = Number(!target && landing);
+        // Every withdrawal uses the visible lift-and-land, including pieces
+        // retained by panning; sinking below adjacent ground hides the motion.
+        this.pulses[i] = Number(!target);
         this.fromHeights[i] = target && !this.progress[i] ? -.28 : this.heights[i];
         this.fromProgress[i] = this.progress[i];
-        this.ages[i] = this.active.has(i) ? 0 : target || landing ? -(i % 3) * .022 : 0;
+        this.ages[i] = this.active.has(i) ? 0 : -(i % 3) * .022;
         this.targets[i] = target; this.active.add(i);
+        if (retract && !landing && target && !this.progress[i]) entering.push(i);
       }
+    }
+    if (entering.length) {
+      // Retained pan edges land first; new outer pieces then rise, without
+      // restarting pieces already moving during a continuous wheel gesture.
+      let delay = 0;
+      for (const i of this.active) if (!this.targets[i] && this.progress[i] > 0) delay = Math.max(delay, MOTION_SECONDS - this.ages[i]);
+      for (const i of entering) this.ages[i] -= delay;
     }
     if (immediate) this.write();
   }
@@ -85,13 +95,13 @@ export class TownEdgeField {
     for (const i of this.active) {
       this.ages[i] += seconds;
       const target = this.targets[i], pulse = this.pulses[i];
-      const t = reducedMotion ? 1 : Math.max(0, Math.min(1, this.ages[i] / (target || pulse ? .26 : .16)));
+      const t = reducedMotion ? 1 : Math.max(0, Math.min(1, this.ages[i] / MOTION_SECONDS));
       this.progress[i] = this.fromProgress[i] + (target - this.fromProgress[i]) * ease(t);
       if (pulse) {
         const phase = t < .25 ? t / .25 : (1 - t) / .75;
         this.heights[i] = this.fromHeights[i] * (1 - ease(t)) + .28 * phase * phase * (3 - 2 * phase);
       } else {
-        this.heights[i] = this.fromHeights[i] + ((target ? 0 : -.22) - this.fromHeights[i]) * ease(t);
+        this.heights[i] = this.fromHeights[i] * (1 - ease(t));
       }
       if (t === 1) { this.progress[i] = target; this.heights[i] = 0; this.active.delete(i); }
     }

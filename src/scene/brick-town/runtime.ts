@@ -444,14 +444,17 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     scene.updateTransformMatrix();
     const transform=scene.getTransformMatrix();
     const edgeRevision=edgeState.field.revision;
+    // Advance existing motion before assigning new targets, so the elapsed
+    // time before a zoom cannot consume its entire retreat on the first frame.
+    let edgeMoved=edgeState.field.tick(Math.min(.05,frameSeconds),state.reducedMotion);
     const edgeChanged=!edgeInitialized||edgeZoom!==zoom||!transform.equals(edgeTransform);
     if(edgeChanged){
       // Panning can discover new ground, but never withdraws an already revealed
       // piece. Both zoom directions settle into the same solid brick footprint.
       edgeState.field.retarget(transform.m,edgeState.inset,zoom!==edgeZoom,state.reducedMotion||!edgeInitialized,!edgeInitialized,edgeInitialized&&zoom>edgeZoom);
       edgeTransform.copyFrom(transform);edgeZoom=zoom;edgeInitialized=true;
+      edgeMoved=edgeState.field.tick(0,state.reducedMotion)||edgeMoved;
     }
-    const edgeMoved=edgeState.field.tick(frameSeconds,state.reducedMotion);
     if(edgeRevision!==edgeState.field.revision){edgeState.texture.update(edgeState.field.data);shadows.getShadowMap()?.resetRefreshCounter();}
     if(edgeWasReduced!==state.reducedMotion){edgeWasReduced=state.reducedMotion;shadows.getShadowMap()?.resetRefreshCounter();}
     const edgeHighlights=houses.map(house=>Number(worldEdgeVisibility(scene,house.plot.x,0,house.plot.z)>.01)).join('');
