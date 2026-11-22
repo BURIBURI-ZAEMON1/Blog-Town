@@ -82,8 +82,6 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   let zoom=defaultZoom;
   const edgeState=townEdgeState(scene);
   edgeState.close=0;edgeState.lift=initial.reducedMotion?0:1;
-  // Coarser mobile bricks need room for their full footprint before the screen edge.
-  edgeState.inset=mobile?.065:0;
   const clampCameraTarget=()=>{
     const panBounds=getCameraPanBounds(
       townTerrainBounds,camera.alpha,camera.beta,
@@ -473,6 +471,9 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     }
     edgeState.close=edgeCloseAmount(zoom,defaultZoom);
     edgeState.lift=state.reducedMotion?0:1;
+    // Keep the portrait landing compact; blend back to the distant footprint.
+    const portraitEdge=mobile&&canvas.clientHeight>canvas.clientWidth?Math.max(0,Math.min(1,(zoom/defaultZoom-.75)/.25)):0;
+    edgeState.inset=mobile?.065-.03*portraitEdge:0;
     scene.updateTransformMatrix();
     const transform=scene.getTransformMatrix();
     const edgeRevision=edgeState.field.revision;
@@ -483,7 +484,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     if(edgeChanged){
       // Panning can discover new ground, but never withdraws an already revealed
       // piece. Both zoom directions settle into the same solid brick footprint.
-      edgeState.field.retarget(transform.m,edgeState.inset,zoom!==edgeZoom,state.reducedMotion||!edgeInitialized,!edgeInitialized,edgeInitialized&&zoom>edgeZoom);
+      edgeState.field.retarget(transform.m,edgeState.inset,zoom!==edgeZoom,state.reducedMotion||!edgeInitialized,!edgeInitialized,edgeInitialized&&zoom>edgeZoom,[1-.08*portraitEdge,1+.12*portraitEdge]);
       edgeTransform.copyFrom(transform);edgeZoom=zoom;edgeInitialized=true;
       edgeMoved=edgeState.field.tick(0,state.reducedMotion)||edgeMoved;
     }

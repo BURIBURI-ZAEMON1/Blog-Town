@@ -58,7 +58,7 @@ export class TownEdgeField {
       this.owners[i] = owner;
     }
   }
-  retarget(matrix: ArrayLike<number>, inset: number, retract: boolean, immediate: boolean, initial = false, landing = false) {
+  retarget(matrix: ArrayLike<number>, inset: number, retract: boolean, immediate: boolean, initial = false, landing = false, screenScale: readonly [number, number] = [1, 1]) {
     const entering: number[] = [];
     for (let i = 0; i < COUNT; i++) {
       if (this.owners[i] !== i) continue;
@@ -66,7 +66,7 @@ export class TownEdgeField {
       const w = x * matrix[3] + z * matrix[11] + matrix[15];
       const screenX = (x * matrix[0] + z * matrix[8] + matrix[12]) / w;
       const screenY = (x * matrix[1] + z * matrix[9] + matrix[13]) / w;
-      const screenD = edgeDistance(screenX, screenY, inset);
+      const screenD = edgeDistance(screenX * screenScale[0], screenY * screenScale[1], inset);
       const target = Number(initial ? screenD >= 0 : this.targets[i] ? !retract || screenD >= -.035 : screenD > .025);
       if (immediate) {
         this.progress[i] = this.targets[i] = target; this.heights[i] = 0; this.active.delete(i);

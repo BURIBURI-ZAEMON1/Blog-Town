@@ -39,7 +39,8 @@ const jsonLdText = JSON.stringify(buildPageJsonLd(selectedPost)).replace(/</g, '
       document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0b1220' : '#ffffff');
       let entered = false;
       try { entered = sessionStorage.getItem('town:entered') === 'true'; } catch {}
-      if (!entered) {
+      // Each full town load may fetch new assets; in-app navigation stays direct.
+      if (document.documentElement.dataset.initialSurface === 'town' || !entered) {
         document.documentElement.classList.add('has-site-entry');
         window.setTimeout(() => {
           document.documentElement.classList.remove('has-site-entry');
