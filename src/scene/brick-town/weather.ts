@@ -33,7 +33,7 @@ export function createWeatherController(scene:Scene,seed:string,mobile:boolean) 
       }
     }
   }
-  function set(nextKind:Precipitation,nextWet:boolean,reducedMotion:boolean) {
+  function set(nextKind:Precipitation,nextWet:boolean,reducedMotion:boolean,strength=1) {
     wet=nextWet;reduced=reducedMotion;
     if(!mesh||nextKind!==kind) {
       mesh?.dispose();kind=nextKind;elapsed=0;
@@ -43,10 +43,11 @@ export function createWeatherController(scene:Scene,seed:string,mobile:boolean) 
       const lines:Vector3[][]=[];
       for(let i=0;i<positions.length;i+=6)lines.push([Vector3.FromArray(positions,i),Vector3.FromArray(positions,i+3)]);
       mesh=CreateLineSystem('town-precipitation',{lines,updatable:true},scene);
-      mesh.color=Color3.FromHexString(kind==='snow'?'#f3ffff':'#bad4dc');mesh.alpha=kind==='snow'?0.85:0.42;
+      mesh.color=Color3.FromHexString(kind==='snow'?'#f3ffff':'#bad4dc');
       mesh.isPickable=false;mesh.alwaysSelectAsActiveMesh=true;
     }
-    mesh.setEnabled(wet&&!reduced);
+    mesh.alpha=(kind==='snow'?0.85:0.42)*strength;
+    mesh.setEnabled(wet&&!reduced&&strength>0);
   }
   function tick(dt:number) {
     if(!wet||reduced||!mesh)return;

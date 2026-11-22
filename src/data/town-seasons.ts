@@ -23,11 +23,6 @@ export type SeasonProfile = {
     leaves: string[];
     snow: string;
   };
-  lighting: {
-    sun: string;
-    sky: string;
-    clear: string;
-  };
 };
 
 export const SEASON_ORDER: Season[] = ['spring', 'summer', 'autumn', 'winter'];
@@ -42,7 +37,6 @@ export const SEASON_PROFILES: Record<Season, SeasonProfile> = {
       treeShade: ['#4e7e40', '#649146'], flower: ['#ee7b86', '#f2c84b', '#b78add', '#f5f0d5'],
       leaves: ['#8faf5a'], snow: '#f5f8ee',
     },
-    lighting: { sun: '#fff1d6', sky: '#e8f3e8', clear: '#ffffff' },
   },
   summer: {
     id: 'summer', label: '夏', shortLabel: 'SUMMER', glyph: 'sun', description: '当前的小镇，树影和水面都在发亮',
@@ -53,7 +47,6 @@ export const SEASON_PROFILES: Record<Season, SeasonProfile> = {
       treeShade: ['#31583d', '#cc5940'], flower: ['#cc5940', '#efba36', '#3f7887'],
       leaves: ['#739546'], snow: '#f5f8ee',
     },
-    lighting: { sun: '#fff0d2', sky: '#dce7ed', clear: '#ffffff' },
   },
   autumn: {
     id: 'autumn', label: '秋', shortLabel: 'AUTUMN', glyph: 'leaf', description: '树冠染上金色，风把落叶带到路边',
@@ -64,7 +57,6 @@ export const SEASON_PROFILES: Record<Season, SeasonProfile> = {
       treeShade: ['#9a4f2c', '#a86f2e'], flower: ['#db7438', '#e7ad36', '#a95a3e'],
       leaves: ['#d89432', '#bd5d32', '#e0b249', '#a94d2d'], snow: '#f5f8ee',
     },
-    lighting: { sun: '#f7d5a0', sky: '#e5ded0', clear: '#ffffff' },
   },
   winter: {
     id: 'winter', label: '冬', shortLabel: 'WINTER', glyph: 'snow', description: '雪落在屋顶与树梢，河面结成一层薄冰',
@@ -74,7 +66,6 @@ export const SEASON_PROFILES: Record<Season, SeasonProfile> = {
       water: ['#91cedd', '#a6dce5', '#bce7ea'], shore: '#dbe4dd', tree: ['#778b83', '#9bad9f'],
       treeShade: ['#536c67', '#6f837a'], flower: ['#f4f8f4'], leaves: ['#dce8e7'], snow: '#fbffff',
     },
-    lighting: { sun: '#e7f3ff', sky: '#d9e6ef', clear: '#ffffff' },
   },
 };
 

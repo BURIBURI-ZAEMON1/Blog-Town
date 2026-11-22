@@ -13,6 +13,7 @@ function load(path){
   new Function('require','module','exports',output)(localRequire,module,module.exports);return module.exports;
 }
 const {createTownLayout,townBoard}=load('src/data/town-layout.ts');
+const {inTownOutline}=load('src/data/town-outline.ts');
 const {buildWorld,randomFor}=load('src/scene/brick-town/world.ts');
 const {buildHouse}=load('src/scene/brick-town/buildings.ts');
 const {createSeasonController}=load('src/scene/brick-town/seasons.ts');
@@ -43,7 +44,7 @@ for(const mobile of [false,true]) {
       assert(controller.coverCount>100,`${season} cover unexpectedly sparse`);
       for(const mesh of controller.meshes)for(const matrix of mesh.thinInstanceGetWorldMatrices()) {
         const p={x:matrix.m[12],z:matrix.m[14]};
-        assert(p.x>townBoard.minX&&p.x<townBoard.maxX&&p.z>townBoard.minZ&&p.z<townBoard.maxZ,'cover escaped board');
+        assert(inTownOutline(p),'cover escaped brick outline');
         assert(!world.isRoad(p,0.02)&&!world.isWater(p,0.02)&&!world.inHouse(p,0.02),'cover entered a road, river or article lot');
       }
     }

@@ -1,7 +1,7 @@
 export type Precipitation = 'rain' | 'snow';
 export type WeatherDrop = { x: number; z: number; y: number; speed: number };
 
-export const PRECIPITATION_PROBABILITY = 0.3;
+export const PRECIPITATION_PROBABILITY = 0.18;
 const hash = (value: string) => [...value].reduce((sum, char) => (sum * 33 + char.charCodeAt(0)) >>> 0, 5381);
 
 export const weatherIsPrecipitating = (seed: string, slot: number) => {

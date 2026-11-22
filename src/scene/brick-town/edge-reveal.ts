@@ -111,7 +111,7 @@ export class TownEdgeField {
   visibility(x: number, z: number) { return this.data[gridIndex(x, z) * 4 + 1] / 255; }
 }
 
-type EdgeState = { close: number; lift: number; inset: number; field: TownEdgeField; texture: RawTexture };
+type EdgeState = { close: number; lift: number; inset: number; field: TownEdgeField; texture: RawTexture; sunRay: [number,number,number]; cloudStrength: number; cloudTime: number };
 const states = new WeakMap<Scene, EdgeState>();
 export function townEdgeState(scene: Scene) {
   let state = states.get(scene);
@@ -119,7 +119,7 @@ export function townEdgeState(scene: Scene) {
     const field = new TownEdgeField();
     const texture = RawTexture.CreateRGBATexture(field.data, WIDTH, HEIGHT, scene, false, false, Texture.NEAREST_SAMPLINGMODE);
     texture.wrapU = texture.wrapV = Texture.CLAMP_ADDRESSMODE;
-    state = { close: 1, lift: 0, inset: 0, field, texture }; states.set(scene, state);
+    state = { close: 1, lift: 0, inset: 0, field, texture, sunRay: [0,-1,0], cloudStrength: 0, cloudTime: 0 }; states.set(scene, state);
   }
   return state;
 }
@@ -158,17 +158,24 @@ export function configureTownEdgeShadows(shadows: ShadowGenerator, scene: Scene)
 export class TownEdgeMaterial extends MaterialPluginBase {
   private state: EdgeState;
   constructor(material: PBRMaterial, scene: Scene) {
-    super(material, 'TownEdge', 180, {}, true, true);
+    super(material, 'TownEdge', 180, { TOWN_CLOUD_SHADOWS: (scene.getEngine().getRenderingCanvas()?.clientWidth??0)>=720 }, true, true);
     this.state = townEdgeState(scene);
   }
   getAttributes(attributes: string[]) { attributes.push('edgeAnchor'); }
   getSamplers(samplers: string[]) { samplers.push('townEdgeMap'); }
   getUniforms() {
-    return { ubo: [{ name: 'edgeLift', size: 1, type: 'float' }], vertex: 'uniform float edgeLift;' };
+    return {
+      ubo: [{ name: 'edgeLift', size: 1, type: 'float' }, { name: 'townSunCloud', size: 4, type: 'vec4' }, { name: 'townCloudTime', size: 1, type: 'float' }, { name: 'townViewDirection', size: 3, type: 'vec3' }],
+      vertex: 'uniform float edgeLift;', fragment: 'uniform vec4 townSunCloud; uniform float townCloudTime; uniform vec3 townViewDirection;',
+    };
   }
-  bindForSubMesh(buffer: UniformBuffer) {
+  bindForSubMesh(buffer: UniformBuffer, scene: Scene) {
     buffer.updateFloat('edgeLift', this.state.lift);
     buffer.setTexture('townEdgeMap', this.state.texture);
+    buffer.updateFloat4('townSunCloud', ...this.state.sunRay, this.state.cloudStrength);
+    buffer.updateFloat('townCloudTime', this.state.cloudTime);
+    const view=scene.activeCamera!.getViewMatrix().m;
+    buffer.updateFloat3('townViewDirection', -view[2], -view[6], -view[10]);
   }
   getCustomCode(type: string): Record<string, string> {
     if (type === 'vertex') return {
@@ -176,8 +183,39 @@ export class TownEdgeMaterial extends MaterialPluginBase {
       CUSTOM_VERTEX_UPDATE_WORLDPOS: EDGE_VERTEX + 'vPositionW = worldPos.xyz;',
     };
     return {
-      CUSTOM_FRAGMENT_DEFINITIONS: 'varying float vTownEdge;',
-      CUSTOM_FRAGMENT_MAIN_BEGIN: EDGE_DISCARD,
+      // Orthographic rays are parallel; perspective eye vectors create a moving
+      // specular hotspot across flat ground as the camera pans.
+      '!vec3 viewDirectionW=normalize\\(vEyePosition.xyz-vPositionW\\);': 'vec3 viewDirectionW=normalize(townViewDirection);',
+      CUSTOM_FRAGMENT_DEFINITIONS: `varying float vTownEdge;
+        #ifdef TOWN_CLOUD_SHADOWS
+        float townCloudShadow(vec3 point) {
+          if (townSunCloud.w <= 0.0) return 1.0;
+          // Project onto an unseen cloud layer along the sun's world-space rays.
+          vec2 p = point.xz + (14.0-point.y)*townSunCloud.xz/min(-.12,townSunCloud.y);
+          p += vec2(.12,.045)*townCloudTime;
+          float shape = sin(p.x*.19 + sin(p.y*.23)*.8)*.5+.5;
+          shape *= .7+.3*sin(p.y*.17-p.x*.09);
+          return 1.0-townSunCloud.w*smoothstep(.38,.85,shape);
+        }
+        #endif`,
+      CUSTOM_FRAGMENT_MAIN_BEGIN: `${EDGE_DISCARD}
+        #ifdef TOWN_CLOUD_SHADOWS
+        float townCloud = townCloudShadow(vPositionW);
+        float townLightTransmission = 1.0;
+        #endif`,
+      ...Object.fromEntries([0,1,2,3].map(i=>[`CUSTOM_LIGHT${i}_COLOR`, `
+        #ifdef TOWN_CLOUD_SHADOWS
+          #ifdef DIRLIGHT${i}
+          townLightTransmission = townCloud;
+          #else
+          townLightTransmission = 1.0;
+          #endif
+        #endif`])),
+      '!aggShadow\\+=shadow;': `
+        #ifdef TOWN_CLOUD_SHADOWS
+        shadow *= townLightTransmission;
+        #endif
+        aggShadow+=shadow;`,
     };
   }
 }

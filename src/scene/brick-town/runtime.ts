@@ -2,7 +2,6 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera.js';
 import { Camera } from '@babylonjs/core/Cameras/camera.js';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color.js';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector.js';
-import { CubeTexture } from '@babylonjs/core/Materials/Textures/cubeTexture.js';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight.js';
 import { Engine } from '@babylonjs/core/Engines/engine.js';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight.js';
@@ -19,6 +18,7 @@ import { buildHouse, FLOOR_HEIGHT, GROUND_Y } from './buildings';
 import { buildMinifig } from './minifig';
 import { createLife, tickLife, type Citizen } from './life';
 import { weatherIsPrecipitating } from '../../data/town-weather';
+import { blendTownDaylight, daylightStep, getTownDaylight } from '../../data/town-daylight';
 import { SEASON_PROFILES } from '../../data/town-seasons';
 import { createSeasonController } from './seasons';
 import { createWeatherController } from './weather';
@@ -69,11 +69,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   scene.skipPointerMovePicking=true;scene.skipPointerDownPicking=true;scene.skipPointerUpPicking=true;
   scene.blockMaterialDirtyMechanism=true;
   scene.clearColor=Color4.FromHexString('#ffffffff');
-  scene.environmentTexture=CubeTexture.CreateFromPrefilteredData('/assets/brick-town/studio.env',scene);
-  scene.environmentIntensity=0.75;
   scene.imageProcessingConfiguration.toneMappingEnabled=true;
   scene.imageProcessingConfiguration.toneMappingType=ImageProcessingConfiguration.TONEMAPPING_ACES;
-  scene.imageProcessingConfiguration.exposure=1.15;
   scene.imageProcessingConfiguration.contrast=1.06;
   const camera=new ArcRotateCamera('diorama-camera',Math.PI*0.68,0.96,36,new Vector3(0,0.2,0),scene);
   camera.mode=Camera.ORTHOGRAPHIC_CAMERA;
@@ -113,16 +110,14 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     clampCameraTarget();engine.resize();requestDraw();
   };
   fit();
-  const hemi=new HemisphericLight('cool-sky',new Vector3(0,1,0),scene);
-  hemi.diffuse=color('#dce7ed');hemi.groundColor=color('#706748');hemi.intensity=0.42;
-  const sun=new DirectionalLight('large-window-sun',new Vector3(-0.5,-1,-0.65),scene);
-  sun.position.set(12,25,16);sun.diffuse=color('#fff0d2');sun.intensity=1.5;
-  sun.shadowMinZ=0.1;sun.shadowMaxZ=100;
+  const hemi=new HemisphericLight('diffuse-sky',new Vector3(0,1,0),scene);
+  hemi.specular=Color3.Black();
+  const sun=new DirectionalLight('local-time-sun',new Vector3(0,-1,0),scene);
+  sun.shadowMinZ=0.1;sun.shadowMaxZ=180;
   const shadows=new ShadowGenerator(mobile?512:2048,sun);
   shadows.usePercentageCloserFiltering=!mobile;shadows.filteringQuality=mobile?ShadowGenerator.QUALITY_LOW:ShadowGenerator.QUALITY_MEDIUM;
   shadows.bias=0.00012;shadows.normalBias=0.018;
-  // Only static architecture and scenery cast shadows. Rendering this depth map
-  // once preserves the same town lighting without paying for it every frame.
+  // Cache the static town shadow map; refresh for solar movement and transitions.
   shadows.getShadowMap()!.refreshRate=0;
   configureTownEdgeShadows(shadows,scene);
   const worldStarted=performance.now();
@@ -191,35 +186,66 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   let highlightSignature='';
   let state={...initial};let frames=0;let elapsed=0;
   let weatherSlot=Math.floor(Date.now()/900000),rainy=weatherIsPrecipitating(layout.seed,weatherSlot);
+  let lightTarget=getTownDaylight(new Date(Date.now()),state.colorMode==='night',rainy);
+  let light=lightTarget,lightClock=Date.now(),lightUntil=0,lastLightAt=0;
+  const shadowDirection=Vector3.Zero();
+  let townNight=light.night>=.5;
+  const lampColor=color('#ffba5b'),windowColor=color('#ffb751');
+  const dayGlass=color('#5e97a4'),nightGlass=color('#edbd6d'),overcast=color('#bac4ce');
   let citizens:Citizen[]=[],figures:ReturnType<typeof buildMinifig>[]=[];
   function populate() {
-    citizens=createLife(layout,state.colorMode==='night',rainy,randomFor(`${layout.seed}:${state.colorMode}:${weatherSlot}`));
+    citizens=createLife(layout,townNight,rainy,randomFor(`${layout.seed}:${townNight}:${weatherSlot}`));
     rebuildFigures();
     // Minifigures are tiny at the map scale; omitting their animated shadow-map
     // passes removes most per-frame shadow draw calls with no visible town loss.
   }
   function rebuildFigures() {
     for(const figure of figures)figure.root.dispose(false,false);
-    figures=citizens.map((p,i)=>buildMinifig(scene,p.role,i,state.colorMode==='night',rainy&&state.season!=='winter'));
+    figures=citizens.map((p,i)=>buildMinifig(scene,p.role,i,townNight,rainy&&state.season!=='winter'));
   }
   function lighting() {
-    const night=state.colorMode==='night',profile=SEASON_PROFILES[state.season];
-    scene.clearColor=Color4.FromHexString(night?'#0b1220ff':'#ffffffff');
-    sun.intensity=night?0.45:rainy?0.75:1.5;sun.diffuse=color(night?'#9cbce8':rainy?'#dbe5e8':profile.lighting.sun);
-    hemi.diffuse=color(profile.lighting.sky);
-    hemi.intensity=night?0.18:rainy?0.40:0.25;scene.environmentIntensity=night?0.20:0.5;
-    scene.imageProcessingConfiguration.exposure=night?0.8:0.82;
-    for(const m of houseMeshes)if(m.metadata.glass){
-      const mat=m.material as PBRMaterial;mat.emissiveColor=night?color('#ffb751'):Color3.Black();mat.emissiveIntensity=night?1.5:0;
-      mat.albedoColor=color(night?'#edbd6d':'#5e97a4');
+    lightClock=Date.now();
+    const next=getTownDaylight(new Date(lightClock),state.colorMode==='night',rainy);
+    const now=performance.now();
+    const changed=Math.abs(next.night-lightTarget.night)>.02||next.cloud!==lightTarget.cloud||Math.hypot(...next.direction.map((v,i)=>v-lightTarget.direction[i]))>.05;
+    lightTarget=next;
+    if(changed){lightUntil=frames?now+2200:0;lastLightAt=now;}
+    // The page theme owns the background, independently of the town's solar day.
+    scene.clearColor=Color4.FromHexString(state.colorMode==='night'?'#0b1220ff':'#ffffffff');
+    applyLighting(now);
+  }
+  function applyLighting(now:number) {
+    const amount=now>=lightUntil?1:1-Math.exp(-(now-lastLightAt)/320);
+    light=blendTownDaylight(light,lightTarget,amount);lastLightAt=now;
+    const {night,cloud}=light,day=1-night;
+    sun.direction.copyFromFloats(...light.direction).normalize();
+    sun.position.copyFrom(sun.direction).scaleInPlace(-70);
+    // Direct sunlight vanishes before rain appears, including during transitions.
+    sun.intensity=light.sun*(1-daylightStep(0,.55,cloud));
+    sun.diffuse.copyFromFloats(...light.sunColor);sun.specular.copyFrom(sun.diffuse);
+    hemi.diffuse.copyFromFloats(...light.skyColor);Color3.LerpToRef(hemi.diffuse,overcast,cloud*.8,hemi.diffuse);
+    hemi.groundColor.copyFromFloats(...light.groundColor);
+    hemi.intensity=light.sky+cloud*day*.13;
+    scene.imageProcessingConfiguration.exposure=light.exposure-cloud*day*.08;
+    shadows.setDarkness(1-daylightStep(0,.18,sun.intensity)*.95);
+    edgeState.sunRay=[sun.direction.x,sun.direction.y,sun.direction.z];
+    edgeState.cloudStrength=mobile?0:.4*daylightStep(0,.5,sun.intensity);
+    if(sun.intensity>.001&&!sun.direction.equalsWithEpsilon(shadowDirection,.000001)){
+      shadows.getShadowMap()?.resetRefreshCounter();shadowDirection.copyFrom(sun.direction);
     }
-    for(const m of world.lamps){const mat=m.material as PBRMaterial;mat.emissiveColor=night?color('#ffba5b'):Color3.Black();mat.emissiveIntensity=night?1.5:0;}
-    weather.set(profile.precipitation,rainy,state.reducedMotion);if(glow)glow.isEnabled=night;
+    for(const m of houseMeshes)if(m.metadata.glass){
+      const mat=m.material as PBRMaterial;mat.emissiveColor.copyFrom(windowColor);mat.emissiveIntensity=night*1.5;
+      Color3.LerpToRef(dayGlass,nightGlass,night,mat.albedoColor);
+    }
+    for(const m of world.lamps){const mat=m.material as PBRMaterial;mat.emissiveColor.copyFrom(lampColor);mat.emissiveIntensity=night*1.5;}
+    weather.set(SEASON_PROFILES[state.season].precipitation,cloud>.6,state.reducedMotion,daylightStep(.6,1,cloud));
+    if(glow)glow.isEnabled=night>.001;
+    const nextNight=night>=.5;
+    if(nextNight!==townNight){townNight=nextNight;populate();}
   }
   function update(next:SceneState) {
     const seasonChanged=next.season!==state.season;
-    const rebuildPeople=next.colorMode!==state.colorMode;
-    const environmentChanged=rebuildPeople||seasonChanged||next.reducedMotion!==state.reducedMotion;
+    const environmentChanged=next.colorMode!==state.colorMode||seasonChanged||next.reducedMotion!==state.reducedMotion;
     if(seasonChanged) {
       for(const mesh of seasons.meshes){highlights?.removeMesh(mesh);glow?.removeExcludedMesh(mesh);shadows.removeShadowCaster(mesh);}
       seasons.set(next.season,next.reducedMotion);seasonChanges++;
@@ -227,7 +253,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       shadows.getShadowMap()?.resetRefreshCounter();
       articleMeshes=[...houseMeshes,...seasons.articleMeshes];
     }
-    state={...next};if(rebuildPeople)populate();else if(seasonChanged)rebuildFigures();if(environmentChanged)lighting();
+    state={...next};if(seasonChanged)rebuildFigures();if(environmentChanged)lighting();
     if(state.reducedMotion)seasons.tick(0,true);
     const nextHighlightSignature=[state.query,state.category??'',state.tag??'',state.hoveredPostId??'',state.activePostId??'',state.season].join('\u0000');
     if(highlights && nextHighlightSignature!==highlightSignature) {
@@ -391,6 +417,13 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     canvas.dataset.sceneMeshes=String(scene.meshes.length);canvas.dataset.sceneMaterials=String(scene.materials.length);canvas.dataset.sceneVertices=String(scene.getTotalVertices());canvas.dataset.thinInstances=String(scene.meshes.reduce((sum,mesh)=>sum+('thinInstanceCount' in mesh?Number(mesh.thinInstanceCount):0),0));lastDiagnostics=now;
     canvas.dataset.edgeReveal=edgeState.close.toFixed(3);
     canvas.dataset.edgeAnimating=String(edgeState.field.animating);
+    canvas.dataset.solarHour=light.hour.toFixed(3);canvas.dataset.townNight=String(townNight);
+    canvas.dataset.sunDirection=sun.direction.asArray().map(v=>v.toFixed(4)).join(',');canvas.dataset.sunIntensity=sun.intensity.toFixed(4);
+    canvas.dataset.skyIntensity=hemi.intensity.toFixed(4);canvas.dataset.windowLight=light.night.toFixed(4);
+    canvas.dataset.cloud=light.cloud.toFixed(4);canvas.dataset.lightTransition=String(now<lightUntil);
+    canvas.dataset.lightCount=String(scene.lights.length);canvas.dataset.canvasBackground=scene.clearColor.toHexString();
+    canvas.dataset.studioReflections=String(!!scene.environmentTexture);canvas.dataset.cloudShadows=mobile?'off':'on';
+    canvas.dataset.cloudShadowStrength=edgeState.cloudStrength.toFixed(3);
   }
   function render(){
     if(disposed||!inView||!visible)return;
@@ -425,6 +458,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     if(edgeHighlights!==edgeHighlightSignature){edgeHighlightSignature=edgeHighlights;highlightSignature='';if(effectsReady)update(state);}
     const slot=Math.floor(Date.now()/900000);
     if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsPrecipitating(layout.seed,slot);populate();lighting();}
+    if(Math.abs(Date.now()-lightClock)>=1000)lighting();
+    else if(light!==lightTarget&&(now-lastLightAt>=100||now>=lightUntil))applyLighting(now);
     if(!state.reducedMotion)tickLife(citizens,dt,layout);
     citizens.forEach((p,i)=>{
       const f=figures[i];f.root.position.set(p.position.x,0.10,p.position.z);
@@ -443,7 +478,8 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       for(const m of f.meshes)m.visibility=p.opacity*Math.max(0,Math.min(1,edge/0.5))*revealed;
     });
     weather.tick(dt);seasons.tick(dt,state.reducedMotion);
-    if(!state.reducedMotion&&state.season!=='winter')for(const m of world.glints)m.visibility=0.65+Math.sin(elapsed*1.5)*0.15;
+    edgeState.cloudTime=state.reducedMotion?0:elapsed;
+    if(state.season!=='winter')for(const m of world.glints)m.visibility=daylightStep(.05,.8,sun.intensity)*(state.reducedMotion?.65:.65+Math.sin(elapsed*1.5)*.15);
     const renderStarted=performance.now();scene.render();const renderCost=performance.now()-renderStarted;frames++;
     const noticeFrame=postNotices.project(state.newPostIds, state.guidePostId, canvas.clientWidth, canvas.clientHeight);
     if(noticeFrame)callbacks().onResolveNewPostAnchors?.(noticeFrame);
@@ -458,11 +494,10 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     if(ao&&renderCost>55){slowRenderFrames++;if(slowRenderFrames>=4){ao.dispose();ao=undefined;canvas.dataset.adaptiveAo='off';}}else slowRenderFrames=Math.max(0,slowRenderFrames-1);
     if(frames===1||focusFlight||completedFocus||edgeChanged||edgeMoved||now-lastDiagnostics>500)publishDiagnostics(now);
     completedFocus?.();
-    if(state.reducedMotion&&--renderBurst<=0&&firstFramePublished&&effectsReady&&scene.isReady()&&engine.areAllEffectsReady()){
+    if(state.reducedMotion&&--renderBurst<=0&&now>=lightUntil&&firstFramePublished&&effectsReady&&scene.isReady()&&engine.areAllEffectsReady()){
       engine.stopRenderLoop(render);canvas.dataset.renderLoop='idle';publishDiagnostics(now);
-      // Static weather still follows the real 15-minute boundary without a
-      // permanent animation loop or polling timer. Interaction cancels this wake.
-      weatherWakeTimer=window.setTimeout(requestDraw,900000-Date.now()%900000+1);
+      // A static town sleeps between minute boundaries; weather slots align too.
+      weatherWakeTimer=window.setTimeout(requestDraw,60000-Date.now()%60000+1);
     }
   }
   const syncVisibility=()=>{if(inView&&visible){lastFrame=0;requestDraw();}else{engine.stopRenderLoop(render);window.clearTimeout(weatherWakeTimer);weatherWakeTimer=undefined;canvas.dataset.renderLoop='paused';}};
