@@ -1632,3 +1632,5 @@ a.touch-preview-read,
     margin-top: 6px;
   }
 }
+
+.article-meta .article-readers { color: var(--blue); }

@@ -62,7 +62,7 @@ export default function AboutView({ posts, totals }: Props) {
     <div className="about-grid">{aboutContent.sections.map((section, index) => <AboutCard key={section.id} section={section} index={index} />)}</div>
     <footer className="about-notes">
       {!siteConfig.launchDate && stats.since && <p>记录天数从首篇文章发布日（{stats.since.slice(0, 10)}）起计算。</p>}
-      <p>访问统计由<a href="https://busuanzi.ibruce.info/" target="_blank" rel="noreferrer noopener">不蒜子</a>提供。{!totals && '当前统计暂不可用。'}</p>
+      <p>访问统计由<a href="https://busuanzi.9420.ltd/" target="_blank" rel="noreferrer noopener">不蒜子</a>提供。{!totals && '当前统计暂不可用。'}</p>
     </footer>
   </article>;
 }

@@ -92,45 +92,70 @@ scene.dispose(); engine.dispose();
 assert.equal(createSiteStats([], new Date('2026-11-22')).days, undefined);
 assert.equal(createSiteStats([{ date: '2026-11-20', category: 'a', tags: ['x'], wordCount: 120 }], new Date('2026-11-22')).days, 3);
 
-const { recordView } = load('src/lib/views.ts');
-const savedWindow = globalThis.window, savedDocument = globalThis.document;
-let scripts = [], timers = new Map(), timerId = 0;
+const savedWindow = globalThis.window, savedFetch = globalThis.fetch;
+const storage = new Map(), requests = [], visitors = new Set(), readers = new Map();
+let sitePv = 0, nextIdentity = 0, failure;
 globalThis.window = {
-  location: { origin: 'http://localhost:4325', pathname: '/about/' },
-  setTimeout(fn, delay) { timers.set(++timerId, { fn, delay }); return timerId; },
-  clearTimeout(id) { timers.delete(id); },
+  location: { origin: 'http://localhost:4325', pathname: '/posts/a/' },
+  localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
 };
-globalThis.document = {
-  createElement() { return { remove() { this.removed = true; } }; },
-  head: { appendChild(script) { scripts.push(script); } },
+globalThis.fetch = async (url, options) => {
+  const headers = new Headers(options.headers);
+  requests.push({ url, options, headers });
+  if (failure instanceof Error) throw failure;
+  if (failure) return { ok: true, headers: new Headers(), json: async () => failure };
+  const identity = headers.get('Authorization')?.replace('Bearer ', '') ?? `visitor-${++nextIdentity}`;
+  const path = new URL(headers.get('x-bsz-referer')).pathname;
+  visitors.add(identity);
+  if (!readers.has(path)) readers.set(path, new Set());
+  readers.get(path).add(identity);
+  return { ok: true, headers: new Headers({ 'Set-Bsz-Identity': identity }), json: async () => ({ success: true, data: { page_pv: 99, page_uv: readers.get(path).size, site_pv: ++sitePv, site_uv: visitors.size } }) };
 };
-const respond = (script, payload) => window[new URL(script.src).searchParams.get('jsonpCallback')](payload);
+const freshCounter = () => { cache.delete(resolve('src/lib/views.ts')); return load('src/lib/views.ts').recordView; };
 try {
-  assert.equal(await recordView('/about/'), undefined);
-  assert.equal(scripts.length, 0, 'local preview contacted the external counter');
+  let recordView = freshCounter();
+  assert.equal(await recordView('/posts/a/'), undefined);
+  assert.equal(requests.length, 0, 'local preview contacted the external counter');
   window.location.origin = new URL(siteConfig.siteUrl).origin;
-  assert.equal(await recordView('/posts/'), undefined, 'stale route was counted');
-  const pending = recordView('/about/');
-  const script = scripts.at(-1);
-  assert.equal(new URL(script.src).origin, 'https://busuanzi.ibruce.info');
-  assert.equal(script.referrerPolicy, 'no-referrer-when-downgrade', 'article referrer lost its path');
-  respond(script, { page_pv: 12, site_pv: 1234, site_uv: 234 });
-  assert.deepEqual(await pending, { views: 12, totals: { pageviews: 1234, visitors: 234 } });
-  assert(script.removed, 'completed counter script leaked into the document');
-  for (const payload of [null, {}, { page_pv: -1, site_pv: 2, site_uv: 1 }, { page_pv: '1', site_pv: 2, site_uv: 1 }]) {
-    const invalid = recordView('/about/'); respond(scripts.at(-1), payload);
-    assert.equal(await invalid, undefined, 'invalid external counts were accepted');
+  assert.equal(await recordView('/posts/stale/'), undefined, 'stale route was counted');
+  const first = recordView('/posts/a/'), duplicate = recordView('/posts/a/');
+  assert.deepEqual(await first, { readers: 1, totals: { pageviews: 1, visitors: 1 } });
+  assert.deepEqual(await duplicate, await first);
+  assert.equal(requests.length, 1, 'duplicate effects counted the same page twice');
+  assert.equal(new URL(requests[0].url).origin, 'https://busuanzi.9420.ltd');
+  assert.equal(requests[0].options.credentials, 'omit', 'counter still relies on third-party cookies');
+  assert.equal(requests[0].headers.get('x-bsz-referer'), `${window.location.origin}/posts/a/`);
+  assert.deepEqual(await recordView('/posts/a/'), await first);
+  assert.equal(requests.length, 1, 'settled duplicate counted again');
+
+  window.location.pathname = '/'; const home = recordView('/');
+  window.location.pathname = '/posts/a/'; const back = recordView('/posts/a/');
+  window.location.pathname = '/posts/b/'; const other = recordView('/posts/b/');
+  assert.deepEqual(await home, { readers: 1, totals: { pageviews: 2, visitors: 1 } });
+  assert.deepEqual(await back, { readers: 1, totals: { pageviews: 3, visitors: 1 } });
+  assert.deepEqual(await other, { readers: 1, totals: { pageviews: 4, visitors: 1 } });
+  assert(requests.slice(1).every(request => request.headers.get('Authorization') === 'Bearer visitor-1'), 'rapid route changes raced visitor identity');
+  const originalIdentity = new Map(storage);
+  storage.clear(); recordView = freshCounter(); window.location.pathname = '/posts/a/';
+  assert.deepEqual(await recordView('/posts/a/'), { readers: 2, totals: { pageviews: 5, visitors: 2 } });
+  assert.equal(readers.get('/posts/b/').size, 1, 'another article inherited the site visitor total');
+  storage.clear(); for (const [key, value] of originalIdentity) storage.set(key, value);
+  recordView = freshCounter();
+  assert.deepEqual(await recordView('/posts/a/'), { readers: 2, totals: { pageviews: 6, visitors: 2 } }, 'reload lost the stored visitor identity');
+
+  for (const payload of [{ success: false }, { success: true, data: {} }, { success: true, data: { page_uv: -1, site_pv: 2, site_uv: 1 } }, { success: true, data: { page_uv: '1', site_pv: 2, site_uv: 1 } }, { success: true, data: { page_pv: 41, site_pv: 2, site_uv: 1 } }, new Error('offline'), new DOMException('timeout', 'TimeoutError')]) {
+    failure = payload; recordView = freshCounter();
+    assert.equal(await recordView('/posts/a/'), undefined, 'invalid or unavailable counts were displayed');
   }
-  const failed = recordView('/about/'); scripts.at(-1).onerror();
-  assert.equal(await failed, undefined);
-  const timedOut = recordView('/about/'), late = scripts.at(-1);
-  [...timers.values()].find(timer => timer.delay === 8000).fn();
-  assert.equal(await timedOut, undefined);
-  assert.doesNotThrow(() => respond(late, { page_pv: 1, site_pv: 2, site_uv: 1 }), 'late callback caused an application error');
-  for (const timer of [...timers.values()]) if (timer.delay === 60_000) timer.fn();
-  assert.equal(Object.keys(window).filter(key => key.startsWith('TownViews_')).length, 0, 'JSONP callbacks leaked');
+  failure = undefined;
+  assert(await recordView('/posts/a/'), 'a failed request prevented recovery on the same route');
+  window.localStorage = { getItem() { throw new Error('storage blocked'); }, setItem() { throw new Error('storage blocked'); } };
+  recordView = freshCounter();
+  const noStorageFirst = await recordView('/posts/a/');
+  window.location.pathname = '/posts/b/';
+  assert.equal((await recordView('/posts/b/')).totals.visitors, noStorageFirst.totals.visitors, 'blocked storage lost the in-memory identity');
 } finally {
   if (savedWindow === undefined) delete globalThis.window; else globalThis.window = savedWindow;
-  if (savedDocument === undefined) delete globalThis.document; else globalThis.document = savedDocument;
+  globalThis.fetch = savedFetch;
 }
-console.log('PASS: collision-reserved hamlet, stable growth, real models, accurate stats, external Busuanzi counts, preview isolation and graceful outages');
+console.log('PASS: collision-reserved hamlet, rotating windmill, real models, stats, per-article unique readers, stable visitor identity, route deduplication, preview isolation and graceful outages');

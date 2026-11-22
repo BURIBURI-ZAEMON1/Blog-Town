@@ -623,7 +623,7 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
         </section>}
         {surface === 'about' && <AboutView posts={posts} totals={viewSnapshot?.totals} />}
         {surface === 'archive' && <ArchiveView posts={filteredPosts} onOpen={openArticle} />}
-        {surface === 'article' && selectedPost && selectedSections && layout && <ArticleView viewCount={viewSnapshot?.views} colorMode={colorMode} navigation={navigation} post={selectedPost} sections={selectedSections} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
+        {surface === 'article' && selectedPost && selectedSections && layout && <ArticleView readerCount={viewSnapshot?.readers} colorMode={colorMode} navigation={navigation} post={selectedPost} sections={selectedSections} layout={layout} scrollRoot={mainSurfaceRef} onOpen={openArticle} seriesPosts={selectedPost.series ? sortedPosts.filter((post) => post.series === selectedPost.series).sort((a, b) => (a.seriesIndex ?? 0) - (b.seriesIndex ?? 0)) : []} />}
         {surface === 'article' && selectedPost && !selectedSections && <ArticleLoading post={selectedPost} error={Boolean(contentErrors[selectedPost.id])} onRetry={() => { void loadArticle(selectedPost.id).catch(() => {}); }} />}
         {surface === 'article' && !selectedPost && <EmptyView title="还没有选择文章" copy="从小镇或侧边栏打开一篇笔记吧。" action="回到小镇" onAction={() => navigate('town')} />}
         </div>
@@ -683,7 +683,7 @@ const ArticleSectionContent = memo(function ArticleSectionContent({ html }: { ht
 
 type ArticleHeading = NonNullable<ArticleSection['heading']>;
 
-function ArticleView({ viewCount, post, sections, layout, seriesPosts, scrollRoot, onOpen, navigation, colorMode }: { viewCount?: number; colorMode: ColorMode; navigation: TownNavigation; post: TownPostSummary; sections: ArticleSection[]; layout: TownLayout; seriesPosts: TownPostSummary[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
+function ArticleView({ readerCount, post, sections, layout, seriesPosts, scrollRoot, onOpen, navigation, colorMode }: { readerCount?: number; colorMode: ColorMode; navigation: TownNavigation; post: TownPostSummary; sections: ArticleSection[]; layout: TownLayout; seriesPosts: TownPostSummary[]; scrollRoot: React.RefObject<HTMLElement | null>; onOpen: (id: string) => void }) {
   const headings = useMemo(() => sections.flatMap((section) => section.heading ? [section.heading] : []), [sections]);
   const townMap = useMemo(() => createTownMapModel(layout, post.id), [layout, post.id]);
   const seriesIndex = seriesPosts.findIndex((item) => item.id === post.id);
@@ -869,7 +869,7 @@ function ArticleView({ viewCount, post, sections, layout, seriesPosts, scrollRoo
   }, [collapsed, sections]);
 
   // Keep the comment anchor available during lazy loading for sign-in return links.
-  return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{viewCount !== undefined && <><span>·</span><span>{viewCount.toLocaleString()} 次阅读</span></>}{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-body">{sections.map((section, index) => {
+  return <section className="article-page"><div className="article-layout"><article><span className="section-eyebrow">FIELD NOTE · {formatDate(post.date).toUpperCase()}</span><h1>{post.title}</h1><p className="article-dek">{post.description}</p><div className="article-meta"><span>{post.category}</span><span>·</span><span>{post.readingTime} 分钟阅读</span><span>·</span><span>{post.wordCount} 字</span>{post.series && <><span>·</span><span>{post.series} / {(post.seriesIndex ?? 0) + 1}</span></>}{readerCount !== undefined && <><span>·</span><span className="article-readers">{readerCount.toLocaleString()} 人看过</span></>}</div>{seriesPosts.length > 1 && <SeriesDrawer posts={seriesPosts} selectedPostId={post.id} onOpenArticle={onOpen} />}{post.cover && <figure className="article-cover"><img src={post.cover} alt={post.coverAlt ?? post.title} /></figure>}<div className="article-body">{sections.map((section, index) => {
     const ancestorHidden = hiddenSections[index];
     const ownCollapsed = section.heading ? Boolean(collapsed[section.heading.id]) : false;
     const Heading = section.heading ? ARTICLE_HEADING_TAGS[Math.min(section.heading.level, 6)] : undefined;

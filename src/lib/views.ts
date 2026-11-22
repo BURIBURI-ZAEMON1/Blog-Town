@@ -1,39 +1,36 @@
 import { siteConfig } from '../config/site';
 
-export type ViewSnapshot = { views: number; totals: { pageviews: number; visitors: number } };
-let requestId = 0;
+export type ViewSnapshot = { readers: number; totals: { pageviews: number; visitors: number } };
+const identityKey = 'town:views:identity';
+let identity: string | undefined;
+let queue = Promise.resolve();
+let latest: { path: string; promise: Promise<ViewSnapshot | undefined> } | undefined;
 
 export const viewsEnabled = () => typeof window !== 'undefined'
   && new URL(siteConfig.siteUrl).origin === window.location.origin;
 
-export async function recordView(path: string): Promise<ViewSnapshot | undefined> {
-  if (!viewsEnabled() || window.location.pathname !== path) return;
-  return new Promise(resolve => {
-    const callback = `TownViews_${Date.now()}_${requestId++}`;
-    const callbacks = window as unknown as Record<string, unknown>;
-    const script = document.createElement('script');
-    let settled = false;
-    const finish = (snapshot?: ViewSnapshot) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timer);
-      script.remove();
-      // A response arriving after timeout must not call a missing global function.
-      callbacks[callback] = () => {};
-      window.setTimeout(() => { delete callbacks[callback]; }, 60_000);
-      resolve(snapshot);
-    };
-    callbacks[callback] = (value: { page_pv?: number; site_pv?: number; site_uv?: number } | null) => {
-      if (!value || ![value.page_pv, value.site_pv, value.site_uv].every(count => Number.isSafeInteger(count) && count! >= 0)) { finish(); return; }
-      finish({ views: value.page_pv!, totals: { pageviews: value.site_pv!, visitors: value.site_uv! } });
-    };
-    script.src = `https://busuanzi.ibruce.info/busuanzi?jsonpCallback=${callback}`;
-    // The official counter identifies individual articles from the full referrer.
-    script.referrerPolicy = 'no-referrer-when-downgrade';
-    script.async = true;
-    script.onerror = () => finish();
-    script.onload = () => finish();
-    const timer = window.setTimeout(() => finish(), 8000);
-    document.head.appendChild(script);
+export function recordView(path: string): Promise<ViewSnapshot | undefined> {
+  if (!viewsEnabled() || window.location.pathname !== path) return Promise.resolve(undefined);
+  if (latest?.path === path) return latest.promise;
+  // Serialize first visits so a fast route change cannot race the identity response.
+  const promise = queue.then(async () => {
+    try {
+      try { identity ||= window.localStorage.getItem(identityKey) || undefined; } catch { /* Private browsing may block storage. */ }
+      const headers: Record<string, string> = { 'x-bsz-referer': new URL(path, siteConfig.siteUrl).href };
+      if (identity) headers.Authorization = `Bearer ${identity}`;
+      const response = await fetch('https://busuanzi.9420.ltd/api', {
+        method: 'POST', headers, credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) return;
+      const value = await response.json();
+      const counts = value?.data;
+      if (value?.success !== true || ![counts?.page_uv, counts?.site_pv, counts?.site_uv].every(count => Number.isSafeInteger(count) && count >= 0)) return;
+      identity = response.headers.get('Set-Bsz-Identity') || identity;
+      if (identity) try { window.localStorage.setItem(identityKey, identity); } catch { /* Keep the identity in memory when storage is unavailable. */ }
+      return { readers: counts.page_uv, totals: { pageviews: counts.site_pv, visitors: counts.site_uv } };
+    } catch { /* Counting must never interrupt reading. */ }
   });
+  latest = { path, promise };
+  queue = promise.then(snapshot => { if (!snapshot && latest?.promise === promise) latest = undefined; });
+  return promise;
 }
