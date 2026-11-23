@@ -406,10 +406,9 @@ export default function TownBlogApp({ posts, layout, initialSurface = 'town', in
     setMobileSidebarOpen(false);
     setHoveredPlaceId(undefined);
     setPlaceAnchor(undefined);
+    if (surface !== 'town' || window.location.pathname !== '/' || window.matchMedia('(max-width: 720px), (prefers-reduced-motion: reduce)').matches) { finishPlace(); return; }
     mainSurfaceRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-    if (window.matchMedia('(max-width: 720px), (prefers-reduced-motion: reduce)').matches) { finishPlace(); return; }
-    if (surface !== 'town') navigateTo('town');
-    else window.requestAnimationFrame(focusPlace);
+    window.requestAnimationFrame(focusPlace);
   };
 
   const navigate = (nextSurface: MainSurface, postId?: string) => {
