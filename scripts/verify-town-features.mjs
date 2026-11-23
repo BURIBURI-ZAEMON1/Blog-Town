@@ -106,7 +106,7 @@ globalThis.fetch = async (url, options) => {
   if (failure instanceof Error) throw failure;
   if (failure) return { ok: true, headers: new Headers(), json: async () => failure };
   const identity = headers.get('Authorization')?.replace('Bearer ', '') ?? clientIdentity;
-  const path = new URL(headers.get('x-bsz-referer')).pathname;
+  const path = url.startsWith('/') ? new URL(url, siteConfig.siteUrl).searchParams.get('path') : new URL(headers.get('x-bsz-referer')).pathname;
   if (!readers.has(path)) readers.set(path, new Set());
   if (options.method === 'POST') { visitors.add(identity); readers.get(path).add(identity); sitePv++; }
   const data = { page_pv: 99, page_uv: readers.get(path).size, site_pv: sitePv, site_uv: visitors.size };
@@ -123,9 +123,10 @@ try {
   assert.deepEqual(await first, { readers: 1, totals: { pageviews: 1, visitors: 1 } });
   assert.deepEqual(await duplicate, await first);
   assert.equal(requests.length, 1, 'duplicate effects counted the same page twice');
-  assert.equal(new URL(requests[0].url).origin, 'https://bsz.dusays.com');
+  assert.equal(new URL(requests[0].url, siteConfig.siteUrl).pathname, '/api/views', 'browser still depends on a cross-origin counter');
   assert.equal(requests[0].options.credentials, 'omit', 'counter still relies on third-party cookies');
-  assert.equal(requests[0].headers.get('x-bsz-referer'), `${window.location.origin}/posts/a/`);
+  assert.equal(new URL(requests[0].url, siteConfig.siteUrl).searchParams.get('path'), '/posts/a/');
+  assert.match(requests[0].headers.get('x-town-visitor'), /^[0-9a-f-]{36}$/);
   assert.deepEqual(await recordView('/posts/a/'), await first);
   assert.equal(requests.length, 1, 'settled duplicate counted again');
 
@@ -173,7 +174,7 @@ try {
   let releaseSlow;
   const startedPaths = [];
   globalThis.fetch = async (url, options) => {
-    const path = new URL(options.headers['x-bsz-referer']).pathname;
+    const path = new URL(url, siteConfig.siteUrl).searchParams.get('path');
     startedPaths.push(path);
     if (path === '/posts/slow/') await new Promise(resolve => { releaseSlow = resolve; });
     return normalFetch(url, options);
@@ -186,6 +187,34 @@ try {
   releaseSlow(); await slow;
   globalThis.fetch = normalFetch;
 
+  const directRequests = [];
+  globalThis.fetch = async (url, options) => {
+    directRequests.push({ url, options });
+    if (url.startsWith('/')) return { ok: false, status: 404 };
+    return normalFetch(url, options);
+  };
+  recordView = freshCounter();
+  assert(await recordView('/posts/current/'), 'static-host fallback lost statistics');
+  assert.deepEqual(directRequests.map(request => request.options.method), ['POST', 'POST']);
+  assert.equal(directRequests[1].url, 'https://bsz.dusays.com/api');
+  globalThis.fetch = normalFetch;
+
+  window.location.pathname = '/posts/current/';
+  const beforeRefresh = sitePv;
+  await load('src/lib/views.ts').refreshView('/posts/current/');
+  assert.equal(sitePv, beforeRefresh, 'network recovery incremented page views');
+  const savedTimeout = AbortSignal.timeout;
+  const savedUUID = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID');
+  try {
+    AbortSignal.timeout = undefined;
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined });
+    storage.clear(); recordView = freshCounter();
+    assert(await recordView('/posts/current/'), 'older browser APIs caused statistics to disappear');
+  } finally {
+    AbortSignal.timeout = savedTimeout;
+    if (savedUUID) Object.defineProperty(globalThis.crypto, 'randomUUID', savedUUID);
+    else delete globalThis.crypto.randomUUID;
+  }
   const cacheKey = [...session.keys()].find(key => key.endsWith('/posts/a/'));
   session.set(cacheKey, '{broken'); freshCounter();
   assert.equal(load('src/lib/views.ts').getCachedView('/posts/a/'), undefined, 'corrupt cache was displayed');
@@ -196,3 +225,5 @@ try {
   globalThis.fetch = savedFetch;
 }
 console.log('PASS: collision-reserved hamlet, rotating windmill, real models, stats, per-article unique readers, stable visitor identity, route deduplication, preview isolation and graceful outages');
+
+await import('./verify-view-proxy.mjs');
