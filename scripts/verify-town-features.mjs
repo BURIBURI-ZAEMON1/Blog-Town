@@ -10,7 +10,7 @@ function load(path) {
   if (cache.has(absolute)) return cache.get(absolute).exports;
   const module = { exports: {} }; cache.set(absolute, module);
   const output = ts.transpileModule(readFileSync(absolute, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const localRequire = id => id.startsWith('.') ? load(resolve(dirname(absolute), `${id.replace(/\.ts$/, '')}.ts`)) : require(id);
+  const localRequire = id => id.startsWith('.') ? load(resolve(dirname(absolute), `${id.replace(/\.[jt]s$/, '')}.ts`)) : require(id);
   new Function('require', 'module', 'exports', output)(localRequire, module, module.exports);
   return module.exports;
 }
@@ -117,7 +117,14 @@ try {
   let recordView = freshCounter();
   assert.equal(await recordView('/posts/a/'), undefined);
   assert.equal(requests.length, 0, 'local preview contacted the external counter');
-  window.location.origin = new URL(siteConfig.siteUrl).origin;
+  const canonicalOrigin = new URL(siteConfig.siteUrl);
+  const aliasOrigin = new URL(canonicalOrigin);
+  aliasOrigin.hostname = aliasOrigin.hostname.startsWith('www.') ? aliasOrigin.hostname.slice(4) : `www.${aliasOrigin.hostname}`;
+  window.location.origin = aliasOrigin.origin;
+  assert(load('src/lib/views.ts').viewsEnabled(), 'bare/www production alias disabled statistics');
+  window.location.origin = `${canonicalOrigin.protocol}//preview.invalid`;
+  assert.equal(load('src/lib/views.ts').viewsEnabled(), false, 'preview host enabled statistics');
+  window.location.origin = canonicalOrigin.origin;
   assert.equal(await recordView('/posts/stale/'), undefined, 'stale route was counted');
   const first = recordView('/posts/a/'), duplicate = recordView('/posts/a/');
   assert.deepEqual(await first, { readers: 1, totals: { pageviews: 1, visitors: 1 } });

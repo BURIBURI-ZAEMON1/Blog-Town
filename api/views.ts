@@ -1,4 +1,5 @@
-import { siteConfig } from '../src/config/site';
+import { siteConfig } from '../src/config/site.js';
+import { isSiteOrigin } from '../src/lib/site-origin.js';
 
 type RequestLike = {
   method?: string;
@@ -16,8 +17,9 @@ const tokenPattern = /^[A-Za-z0-9._-]{1,512}$/;
 export default async function handler(request: RequestLike, response: ResponseLike) {
   response.setHeader('Cache-Control', 'no-store');
   const production = new URL(siteConfig.siteUrl);
-  if (process.env.VERCEL_ENV === 'preview' || request.headers.host !== production.host
-    || (request.headers.origin !== undefined && request.headers.origin !== production.origin)
+  const host = request.headers.host;
+  if (process.env.VERCEL_ENV === 'preview' || typeof host !== 'string' || !isSiteOrigin(`${production.protocol}//${host}`)
+    || (request.headers.origin !== undefined && (typeof request.headers.origin !== 'string' || !isSiteOrigin(request.headers.origin)))
     || request.headers['sec-fetch-site'] === 'cross-site') {
     response.status(403).json({ success: false }); return;
   }

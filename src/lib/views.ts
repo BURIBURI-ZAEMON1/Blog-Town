@@ -1,4 +1,5 @@
 import { siteConfig } from '../config/site';
+import { isSiteOrigin } from './site-origin';
 
 export type ViewSnapshot = { readers: number; totals: { pageviews: number; visitors: number } };
 const storagePrefix = 'town:views:dusays:';
@@ -10,7 +11,7 @@ let direct = false;
 let latest: { path: string; promise: Promise<ViewSnapshot | undefined> } | undefined;
 
 export const viewsEnabled = () => typeof window !== 'undefined'
-  && new URL(siteConfig.siteUrl).origin === window.location.origin;
+  && isSiteOrigin(window.location.origin);
 
 function validSnapshot(value: unknown): value is ViewSnapshot {
   const snapshot = value as ViewSnapshot | undefined;

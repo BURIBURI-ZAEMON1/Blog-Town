@@ -1,12 +1,26 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 import { siteConfig } from '../src/config/site.ts';
 
-const module = { exports: {} };
-const code = ts.transpileModule(readFileSync('api/views.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-new Function('require', 'module', 'exports', code)(() => ({ siteConfig }), module, module.exports);
-const handler = module.exports.default;
+// Load emitted ESM files as Vercel does; a mocked require hides invalid imports.
+const output = mkdtempSync(join(tmpdir(), 'town-view-proxy-'));
+let handler;
+try {
+  writeFileSync(join(output, 'package.json'), '{"type":"module"}');
+  for (const path of ['api/views.ts', 'src/config/site.ts', 'src/lib/site-origin.ts']) {
+    const target = join(output, path.replace(/\.ts$/, '.js'));
+    mkdirSync(dirname(target), { recursive: true });
+    const code = ts.transpileModule(readFileSync(path, 'utf8'), {
+      compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
+    }).outputText;
+    writeFileSync(target, code);
+  }
+  handler = (await import(pathToFileURL(join(output, 'api/views.js')).href)).default;
+} finally { rmSync(output, { recursive: true, force: true }); }
 const savedFetch = globalThis.fetch, savedEnv = process.env.VERCEL_ENV;
 const origin = new URL(siteConfig.siteUrl);
 const requests = [];
@@ -38,10 +52,16 @@ try {
   assert.equal(requests.at(-1).options.headers.Authorization, 'Bearer signed.identity');
   await invoke({ headers: { ...base.headers, 'x-town-visitor': '00000000-0000-4000-8000-000000000002' } });
   assert.notEqual(requests.at(-1).options.headers['User-Agent'], requests[0].options.headers['User-Agent'], 'proxy merged different visitors into one server identity');
+  const alias = new URL(origin);
+  alias.hostname = alias.hostname.startsWith('www.') ? alias.hostname.slice(4) : `www.${alias.hostname}`;
+  assert.equal((await invoke({ headers: { ...base.headers, host: alias.host, origin: alias.origin } })).code, 200, 'www/bare domain alias was rejected');
+  assert.equal(requests.at(-1).options.headers['x-bsz-referer'], new URL('/posts/test/', siteConfig.siteUrl).href, 'alias fragmented site totals');
   const before = requests.length;
   for (const changes of [
     { headers: { ...base.headers, origin: 'https://other.invalid' } },
     { headers: { ...base.headers, host: 'preview.invalid' } },
+    { headers: { ...base.headers, host: `${origin.hostname}.evil.invalid` } },
+    { headers: { ...base.headers, origin: `http://${origin.host}` } },
     { headers: { ...base.headers, 'sec-fetch-site': 'cross-site' } },
     { method: 'PUT' }, { query: { path: '//other.invalid/' } }, { query: { path: '/posts/a/?secret=x' } },
     { query: { path: ['/about/', '/'] } }, { query: { path: '/posts/%2e%2e/' } }, { headers: { ...base.headers, 'x-town-visitor': 'bad\r\nvalue' } },
@@ -51,7 +71,7 @@ try {
   assert.equal(requests.length, before, 'invalid or preview traffic reached the counter');
   process.env.VERCEL_ENV = 'production';
   for (mode of ['offline', 'invalid']) assert.equal((await invoke()).code, 503);
-  console.log('PASS: same-origin proxy, stable separate visitor identities, existing tokens, read-only recovery, validation, preview isolation and upstream failure handling');
+  console.log('PASS: emitted ESM function startup, canonical www/bare hostnames, same-origin proxy, stable separate visitor identities, existing tokens, read-only recovery, validation, preview isolation and upstream failure handling');
 } finally {
   globalThis.fetch = savedFetch;
   if (savedEnv === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = savedEnv;
