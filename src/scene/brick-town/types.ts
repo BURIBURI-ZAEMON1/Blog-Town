@@ -40,10 +40,12 @@ export type TownPost = TownPostSummary & {
 };
 
 export type SceneAnchor = { x: number; y: number };
+export type TownCameraPose = { x: number; y: number; z: number; zoom: number };
 
 export type TownSceneProps = {
   posts: TownPostSummary[];
   layout?: TownLayout;
+  initialCamera?: TownCameraPose;
   activePostId?: string;
   hoveredPostId?: string;
   hoveredPlaceId?: string;
@@ -59,7 +61,7 @@ export type TownSceneProps = {
   reducedMotion: boolean;
   onHoverPlace?: (id?: string, anchor?: SceneAnchor) => void;
   onResolvePlaceAnchor?: (id: string, anchor: SceneAnchor) => void;
-  onSelectPlace?: (id: string) => void;
+  onSelectPlace?: (id: string, pointerType?: string) => void;
   onHoverPost: (id?: string, anchor?: SceneAnchor) => void;
   onResolvePostAnchor: (id: string, anchor: SceneAnchor) => void;
   onSelectPost: (id: string, pointerType?: string) => void;

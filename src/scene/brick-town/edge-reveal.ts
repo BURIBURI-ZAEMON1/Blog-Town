@@ -58,6 +58,16 @@ export class TownEdgeField {
       this.owners[i] = owner;
     }
   }
+  saveFootprint() {
+    const targets = this.targets.slice();
+    return () => {
+      this.targets.set(targets);
+      this.progress.set(targets);
+      this.heights.fill(0);
+      this.active.clear();
+      this.write();
+    };
+  }
   retarget(matrix: ArrayLike<number>, inset: number, retract: boolean, immediate: boolean, initial = false, landing = false, screenScale: readonly [number, number] = [1, 1]) {
     const entering: number[] = [];
     for (let i = 0; i < COUNT; i++) {
@@ -121,7 +131,7 @@ export class TownEdgeField {
   visibility(x: number, z: number) { return this.data[gridIndex(x, z) * 4 + 1] / 255; }
 }
 
-type EdgeState = { close: number; lift: number; inset: number; field: TownEdgeField; texture: RawTexture; sunRay: [number,number,number]; cloudStrength: number; cloudTime: number };
+type EdgeState = { lift: number; field: TownEdgeField; texture: RawTexture; sunRay: [number,number,number]; cloudStrength: number; cloudTime: number };
 const states = new WeakMap<Scene, EdgeState>();
 export function townEdgeState(scene: Scene) {
   let state = states.get(scene);
@@ -129,13 +139,14 @@ export function townEdgeState(scene: Scene) {
     const field = new TownEdgeField();
     const texture = RawTexture.CreateRGBATexture(field.data, WIDTH, HEIGHT, scene, false, false, Texture.NEAREST_SAMPLINGMODE);
     texture.wrapU = texture.wrapV = Texture.CLAMP_ADDRESSMODE;
-    state = { close: 1, lift: 0, inset: 0, field, texture, sunRay: [0,-1,0], cloudStrength: 0, cloudTime: 0 }; states.set(scene, state);
+    state = { lift: 0, field, texture, sunRay: [0,-1,0], cloudStrength: 0, cloudTime: 0 }; states.set(scene, state);
   }
   return state;
 }
 export function worldEdgeVisibility(scene: Scene, x: number, _y: number, z: number) {
-  return townEdgeState(scene).field.visibility(x, z);
+  return states.get(scene)?.field.visibility(x, z) ?? 1;
 }
+export const townEdgeRevision = (scene: Scene) => states.get(scene)?.field.revision ?? 0;
 
 const EDGE_VERTEX_DECLARATIONS = 'attribute vec2 edgeAnchor; uniform sampler2D townEdgeMap; varying float vTownEdge;';
 const EDGE_VERTEX = `
@@ -166,36 +177,46 @@ export function configureTownEdgeShadows(shadows: ShadowGenerator, scene: Scene)
 
 /** One shared state texture; revealed pieces retain their normal opaque material. */
 export class TownEdgeMaterial extends MaterialPluginBase {
-  private state: EdgeState;
+  private get state() { return states.get(this._material.getScene()); }
   constructor(material: PBRMaterial, scene: Scene) {
-    super(material, 'TownEdge', 180, { TOWN_CLOUD_SHADOWS: (scene.getEngine().getRenderingCanvas()?.clientWidth??0)>=720 }, true, true);
-    this.state = townEdgeState(scene);
+    super(material, 'TownEdge', 180, { TOWN_CLOUD_SHADOWS: (scene.getEngine().getRenderingCanvas()?.clientWidth ?? 0) >= 720 }, true, true);
   }
-  getAttributes(attributes: string[]) { attributes.push('edgeAnchor'); }
-  getSamplers(samplers: string[]) { samplers.push('townEdgeMap'); }
+  getAttributes(attributes: string[]) { if (this.state) attributes.push('edgeAnchor'); }
+  getSamplers(samplers: string[]) { if (this.state) samplers.push('townEdgeMap'); }
   getUniforms() {
+    const edge = this.state;
     return {
-      ubo: [{ name: 'edgeLift', size: 1, type: 'float' }, { name: 'townSunCloud', size: 4, type: 'vec4' }, { name: 'townCloudTime', size: 1, type: 'float' }, { name: 'townViewDirection', size: 3, type: 'vec3' }],
-      vertex: 'uniform float edgeLift;', fragment: 'uniform vec4 townSunCloud; uniform float townCloudTime; uniform vec3 townViewDirection;',
+      ubo: [
+        ...(edge ? [{ name: 'edgeLift', size: 1, type: 'float' }, { name: 'townSunCloud', size: 4, type: 'vec4' }, { name: 'townCloudTime', size: 1, type: 'float' }] : []),
+        { name: 'townViewDirection', size: 3, type: 'vec3' },
+      ],
+      vertex: edge ? 'uniform float edgeLift;' : '',
+      fragment: (edge ? 'uniform vec4 townSunCloud; uniform float townCloudTime; ' : '') + 'uniform vec3 townViewDirection;',
     };
   }
   bindForSubMesh(buffer: UniformBuffer, scene: Scene) {
-    buffer.updateFloat('edgeLift', this.state.lift);
-    buffer.setTexture('townEdgeMap', this.state.texture);
-    buffer.updateFloat4('townSunCloud', ...this.state.sunRay, this.state.cloudStrength);
-    buffer.updateFloat('townCloudTime', this.state.cloudTime);
+    const edge = this.state;
+    if (edge) {
+      buffer.updateFloat('edgeLift', edge.lift);
+      buffer.setTexture('townEdgeMap', edge.texture);
+      buffer.updateFloat4('townSunCloud', ...edge.sunRay, edge.cloudStrength);
+      buffer.updateFloat('townCloudTime', edge.cloudTime);
+    }
     const view=scene.activeCamera!.getViewMatrix().m;
     buffer.updateFloat3('townViewDirection', -view[2], -view[6], -view[10]);
   }
-  getCustomCode(type: string): Record<string, string> {
-    if (type === 'vertex') return {
+  getCustomCode(type: string): Record<string, string> | null {
+    if (type === 'vertex') return this.state ? {
       CUSTOM_VERTEX_DEFINITIONS: EDGE_VERTEX_DECLARATIONS,
       CUSTOM_VERTEX_UPDATE_WORLDPOS: EDGE_VERTEX + 'vPositionW = worldPos.xyz;',
-    };
-    return {
-      // Orthographic rays are parallel; perspective eye vectors create a moving
-      // specular hotspot across flat ground as the camera pans.
+    } : null;
+    // Both views need parallel rays to prevent a camera-following specular hotspot.
+    const orthographic = {
       '!vec3 viewDirectionW=normalize\\(vEyePosition.xyz-vPositionW\\);': 'vec3 viewDirectionW=normalize(townViewDirection);',
+    };
+    if (!this.state) return orthographic;
+    return {
+      ...orthographic,
       CUSTOM_FRAGMENT_DEFINITIONS: `varying float vTownEdge;
         #ifdef TOWN_CLOUD_SHADOWS
         float townCloudShadow(vec3 point) {

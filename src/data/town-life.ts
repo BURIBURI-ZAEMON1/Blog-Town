@@ -9,8 +9,6 @@ export type TownPersonPlan = {
 
 type PopulationOptions = {
   plotCount: number;
-  night: boolean;
-  rainy: boolean;
   random: () => number;
 };
 
@@ -262,21 +260,9 @@ export const makeDoorPatrolRoute = (plot: TownLifePlot, radius: number): TownLif
   ];
 };
 
-export const getTownPopulationCount = ({ plotCount, night, rainy, random }: PopulationOptions) => {
-  if (plotCount <= 0) return 0;
-  const base = clamp(Math.round(plotCount * (1.15 + random() * 0.55)), 3, 10);
-  const timeAdjusted = night ? Math.round(base * 0.68) : base;
-  const weatherAdjusted = rainy ? Math.round(timeAdjusted * 0.72) : timeAdjusted;
-  // A three-building town keeps the three core roles even at night or in rain;
-  // larger towns still visibly thin out while remaining capped for performance.
-  const minimum = plotCount >= 3 ? 3 : 2;
-  return clamp(weatherAdjusted, minimum, 10);
-};
-
-export const planTownPopulation = (options: PopulationOptions): TownPersonPlan[] => {
-  const count = getTownPopulationCount(options);
-  if (count === 0) return [];
-  const { night, rainy, plotCount, random } = options;
+export const planTownPopulation = ({ plotCount, random }: PopulationOptions): TownPersonPlan[] => {
+  if (plotCount <= 0) return [];
+  const count = clamp(Math.round(plotCount * (1.15 + random() * 0.55)), 3, 9);
   const plans: TownPersonPlan[] = [];
 
   for (let index = 0; index < count; index += 1) {
@@ -296,24 +282,6 @@ export const planTownPopulation = (options: PopulationOptions): TownPersonPlan[]
     plans.push({ role, behavior });
   }
 
-  // A thief is an event, not a permanent population class. At most one can
-  // replace an ordinary passer-by, only at night, and rain lowers the chance.
-  if (night && count >= 3 && random() < (rainy ? 0.18 : 0.36)) {
-    // Preserve at least one townsperson and the guaranteed guard. Prefer to
-    // replace a later traveler/townsperson, but a three-person town may replace
-    // its traveler so the event remains possible at the current demo scale.
-    let replaceIndex = -1;
-    for (let index = plans.length - 1; index >= 1; index -= 1) {
-      if (plans[index].role !== 'guard') {
-        replaceIndex = index;
-        break;
-      }
-    }
-    if (replaceIndex >= 0) plans[replaceIndex] = { role: 'thief', behavior: 'sneak' };
-  }
-
-  // Bind one compatible pair up front. Runtime animation can then use a direct
-  // partner index instead of scanning every pedestrian on every frame.
   const socialIndices = plans
     .map((plan, index) => ({ plan, index }))
     .filter(({ plan }) => plan.role === 'townsperson' || plan.role === 'traveler')

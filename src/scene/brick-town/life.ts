@@ -1,103 +1,275 @@
-import { canSeePoint, makeBuildingVisitRoute, makeTownPatrolRoute, makeThiefArrivalRoute, planTownPopulation, routeMetrics, routeIntersectsPlots, type TownPersonRole, type TownPersonBehavior } from '../../data/town-life';
+import {
+  canSeePoint, makeBuildingVisitRoute, makeTownPatrolRoute, makeThiefArrivalRoute,
+  planTownPopulation, routeMetrics, routeIntersectsPlots, type TownPersonRole, type TownPersonBehavior,
+} from '../../data/town-life';
 import { townTravelRoutes, type TownLayout, type Point } from '../../data/town-layout';
 import { samplePath, pointInPolygon } from '../../data/town-spatial';
 
-export type LifeState = 'walking'|'lurking'|'entering'|'inside'|'resident'|'exiting'|'escaping'|'gone';
+export const CITIZEN_CLEARANCE = 0.64;
+const DOOR_TIME = 1.05;
+const CHAT_TIME = 4.4;
+const clamp = (value: number, end: number) => Math.max(0, Math.min(end, value));
+const separation = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.z - b.z);
+
+export type LifeState = 'walking' | 'lurking' | 'entering' | 'inside' | 'resident' | 'exiting' | 'escaping' | 'gone';
 export type Citizen = {
   role: TownPersonRole; behavior: TownPersonBehavior; state: LifeState;
   route: Point[]; metrics: ReturnType<typeof routeMetrics>; distance: number;
-  speed: number; direction: 1|-1; position: Point; facing: Point;
+  speed: number; direction: 1 | -1; position: Point; facing: Point;
   opacity: number; timer: number; stay: boolean; pair?: number;
-  conversation: number; conversationLeft: number; cooldown: number;
-  chasing: boolean; moving: boolean; returning: boolean;
+  conversation: number; conversationLeft: number; companion?: Citizen; cooldown: number;
+  gesture?: 'map' | 'scan' | 'wave'; pause?: number; nextPause?: number;
+  chattingSecond?: boolean; yielding?: boolean; stride?: number; pursuit?: number; passing?: Citizen; blockedFor?: number;
+  chasing: boolean; moving: boolean; returning: boolean; returnPoints?: Point[];
 };
+type Conditions = { night: boolean; rainy: boolean };
+
 export function atDistance(route: Point[], distances: number[], distance: number) {
-  let i=1; while(i<route.length-1&&distances[i]<distance)i++;
-  const a=route[Math.max(0,i-1)]??{x:0,z:0},b=route[i]??a;
-  const t=Math.max(0,Math.min(1,(distance-(distances[i-1]??0))/Math.max(0.001,(distances[i]??0)-(distances[i-1]??0))));
-  const length=Math.hypot(b.x-a.x,b.z-a.z)||1;
-  return {position:{x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t},facing:{x:(b.x-a.x)/length,z:(b.z-a.z)/length}};
-}
-export function createLife(layout: TownLayout, night: boolean, rainy: boolean, random:()=>number):Citizen[] {
-  const plans=planTownPopulation({plotCount:layout.plots.length,night,rainy,random});
-  const patrol=makeTownPatrolRoute(townTravelRoutes,samplePath);
-  const citizens:Citizen[]=plans.map((plan,i)=>{
-    const target=layout.plots[i%layout.plots.length];
-    const route=plan.role==='guard'?patrol:plan.role==='thief'?makeThiefArrivalRoute(target,townTravelRoutes,samplePath,layout.plots):plan.behavior==='visit'?makeBuildingVisitRoute(target,layout.plots[(i+1)%layout.plots.length],townTravelRoutes,samplePath,layout.plots):samplePath(Object.values(townTravelRoutes)[i%4],8);
-    const metrics=routeMetrics(route),distance=plan.role==='thief'?0:plan.role==='guard'?metrics.totalDistance*0.38:plan.behavior==='visit'?0.15:metrics.totalDistance*(0.35+random()*0.15);
-    const pose=atDistance(route,metrics.distances,distance);
-    return {...plan,state:'walking',route,metrics,distance,speed:plan.role==='thief'?0.38:plan.role==='guard'?0.6:0.43,direction:1,position:pose.position,facing:pose.facing,opacity:1,timer:0,stay:random()<0.22,pair:plan.interactionGroup,conversation:0,conversationLeft:0,cooldown:12,moving:true,chasing:false,returning:false};
-  });
-  const pair=citizens.filter(p=>p.pair!==undefined);
-  if(pair.length===2){
-    const route=samplePath(townTravelRoutes.main,8),metrics=routeMetrics(route);
-    const centerIndex=route.reduce((best,p,i)=>Math.hypot(p.x,p.z)<Math.hypot(route[best].x,route[best].z)?i:best,0);
-    pair.forEach((p,i)=>{p.route=route;p.metrics=metrics;p.distance=Math.max(0,metrics.distances[centerIndex]+i*0.48);p.speed=0.43;p.behavior='commute';p.cooldown=3;p.position=atDistance(route,metrics.distances,p.distance).position;});
-  }
-  return citizens;
+  let index = 1;
+  while (index < route.length - 1 && distances[index] < distance) index++;
+  const a = route[index - 1], b = route[index] ?? a;
+  const length = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+  const amount = clamp((distance - distances[index - 1]) / length, 1);
+  return { position: { x: a.x + (b.x - a.x) * amount, z: a.z + (b.z - a.z) * amount }, facing: { x: (b.x - a.x) / length, z: (b.z - a.z) / length } };
 }
 
-/** Fixed delta integration: no absolute-time speed multiplication, endpoint
- * teleport or world-coordinate offset accumulation. All fades are per citizen. */
-export function tickLife(people:Citizen[],dt:number,layout:TownLayout) {
-  const thief=people.find(p=>p.role==='thief'&&p.state!=='gone'&&p.opacity>0.5);
-  for(const guard of people.filter(p=>p.role==='guard')) {
-    guard.chasing=!!thief&&canSeePoint(guard.position,thief.position,guard.facing,6.2,layout.plots,100);
-    if(guard.chasing&&thief&&thief.state!=='inside') { thief.state='escaping';thief.direction=-1; }
-  }
-  const social=people.filter(p=>p.pair!==undefined&&p.role!=='guard'&&p.role!=='thief');
-  if(social.length===2) {
-    const [a,b]=social;
-    if(a.cooldown<=0&&b.cooldown<=0&&a.state==='walking'&&b.state==='walking'&&Math.hypot(a.position.x-b.position.x,a.position.z-b.position.z)<0.9) {
-      a.conversationLeft=b.conversationLeft=3.2;a.cooldown=b.cooldown=28;
+function occupant(role: TownPersonRole, behavior: TownPersonBehavior, route: Point[], start: number, random: () => number): Citizen {
+  const metrics = routeMetrics(route), distance = clamp(start, metrics.totalDistance);
+  return {
+    role, behavior, route, metrics, distance, ...atDistance(route, metrics.distances, distance),
+    state: 'walking', speed: (role === 'guard' ? .55 : role === 'thief' ? .38 : .42) * (.88 + .24 * random()),
+    direction: 1, opacity: 1, timer: 0, stay: random() < .45, conversation: 0, conversationLeft: 0,
+    cooldown: 7 + random() * 8, nextPause: 5 + random() * 15, stride: random() * Math.PI * 2,
+    moving: true, chasing: false, returning: false,
+  };
+}
+
+export function createLife(layout: TownLayout, random: () => number): Citizen[] {
+  const plans = planTownPopulation({ plotCount: layout.plots.length, random });
+  const patrol = makeTownPatrolRoute(townTravelRoutes, samplePath);
+  const roads = Object.values(townTravelRoutes).map(route => samplePath(route, 8));
+  const main = roads[0];
+  const center = main.reduce((best, point, index) => separation(point, layout.center) < separation(main[best], layout.center) ? index : best, 0);
+  const meeting = routeMetrics(main).distances[center];
+  const people: Citizen[] = [];
+  for (const [index, plan] of plans.entries()) {
+    const target = layout.plots[index % layout.plots.length];
+    const road = roads[index % roads.length];
+    let route = plan.role === 'guard' ? patrol : road;
+    let behavior = plan.behavior;
+    if (plan.interactionGroup !== undefined) {
+      route = main;
+      behavior = 'commute';
+    } else if (behavior === 'visit') {
+      const visit = makeBuildingVisitRoute(target, layout.plots[(index + 1) % layout.plots.length], townTravelRoutes, samplePath, layout.plots);
+      if (routeIntersectsPlots(visit, layout.plots)) behavior = 'commute';
+      else route = visit;
+    }
+    const total = routeMetrics(route).totalDistance;
+    const friend = people.find(person => person.pair !== undefined && person.pair === plan.interactionGroup);
+    const start = plan.interactionGroup !== undefined ? meeting + (friend ? .92 : 0)
+      : behavior === 'visit' ? Math.min(total * .4, .75 + random()) : total * (plan.role === 'guard' ? .38 : .34 + random() * .19);
+    const person = occupant(plan.role, behavior, route, start, random);
+    person.pair = plan.interactionGroup;
+    if (person.pair !== undefined) person.cooldown = .65;
+    if (friend || (person.pair === undefined && index % 3 === 1 && behavior === 'commute')) {
+      person.direction = -1;
+      person.facing = { x: -person.facing.x, z: -person.facing.z };
+    }
+    for (let offset = 0; offset <= total; offset += .8) {
+      const distance = (start + offset) % total, pose = atDistance(route, person.metrics.distances, distance);
+      if (!roomAt(pose.position, people, person)) continue;
+      person.distance = distance;
+      person.position = pose.position;
+      person.facing = { x: pose.facing.x * person.direction, z: pose.facing.z * person.direction };
+      people.push(person);
+      break;
     }
   }
-  for(const p of people) {
-    p.cooldown-=dt;p.moving=false;
-    p.conversationLeft=Math.max(0,p.conversationLeft-dt);
-    const targetBlend=p.conversationLeft>0?1:0;
-    p.conversation+=(targetBlend-p.conversation)*Math.min(1,dt*5);
-    if(p.conversationLeft>0){
-      const partner=social.find(q=>q!==p);
-      if(partner){const dx=partner.position.x-p.position.x,dz=partner.position.z-p.position.z,len=Math.hypot(dx,dz)||1;p.facing={x:dx/len,z:dz/len};}
+  return people;
+}
+
+export function addNightVisitor(people: Citizen[], layout: TownLayout, rainy: boolean, random: () => number) {
+  const old = people.findIndex(person => person.role === 'thief');
+  if (layout.plots.length < 3 || (old >= 0 && people[old].state !== 'gone') || random() >= (rainy ? .18 : .36)) return;
+  const target = layout.plots[Math.floor(random() * layout.plots.length)];
+  const route = makeThiefArrivalRoute(target, townTravelRoutes, samplePath, layout.plots);
+  if (routeIntersectsPlots(route, layout.plots) || !roomAt(route[0], people)) return;
+  const person = occupant('thief', 'sneak', route, 0, random);
+  person.opacity = 0;
+  const index = old < 0 ? people.length : old;
+  people[index] = person;
+  return index;
+}
+
+const outside = (person: Citizen) => person.state !== 'inside' && person.state !== 'resident' && person.state !== 'gone';
+const roomAt = (point: Point, people: Citizen[], except?: Citizen) => people.every(person => person === except || !outside(person) || separation(point, person.position) >= CITIZEN_CLEARANCE);
+
+function walk(person: Citizen, target: Point, budget: number, people: Citizen[], layout: TownLayout, detour = true) {
+  const origin = person.position, length = separation(origin, target);
+  if (length < 1e-5 || budget <= 0) return 0;
+  const aim = Math.atan2(target.x - origin.x, target.z - origin.z);
+  const travel = Math.min(length, budget);
+  for (const turn of detour ? [0, -.75, .75, -1.65, 1.65] : [0]) {
+    const dx = Math.sin(aim + turn), dz = Math.cos(aim + turn);
+    const next = { x: origin.x + dx * travel, z: origin.z + dz * travel };
+    const clearance = people.every(other => {
+      if (other === person || !outside(other)) return true;
+      const along = clamp((other.position.x - origin.x) * dx + (other.position.z - origin.z) * dz, travel);
+      return Math.hypot(other.position.x - origin.x - along * dx, other.position.z - origin.z - along * dz) >= CITIZEN_CLEARANCE - 1e-8;
+    });
+    if (!clearance || routeIntersectsPlots([origin, next], layout.plots, .18)
+      || (layout.features ?? []).some(feature => Math.abs(next.x - feature.x) < feature.width / 2 + .16 && Math.abs(next.z - feature.z) < feature.depth / 2 + .16)
+      || (layout.regions.some(region => region.kind === 'river' && pointInPolygon(next, region.polygon))
+        && !layout.regions.some(region => region.kind === 'road' && pointInPolygon(next, region.polygon)))) continue;
+    person.position = next;
+    person.facing = { x: dx, z: dz };
+    person.moving = true;
+    person.yielding = turn !== 0;
+    person.stride = ((person.stride ?? 0) + travel * 16) % (Math.PI * 2);
+    return travel;
+  }
+  person.yielding = true;
+  return 0;
+}
+
+const face = (person: Citizen, target: Point) => {
+  const length = separation(person.position, target);
+  if (length > .01) person.facing = { x: (target.x - person.position.x) / length, z: (target.z - person.position.z) / length };
+};
+
+export function greetCitizen(person: Citizen, camera: Point) {
+  if (person.state !== 'walking' || person.chasing || person.returning || person.conversationLeft > 0 || person.gesture === 'wave') return;
+  person.gesture = person.role === 'thief' ? 'scan' : 'wave';
+  person.pause = 1.55;
+  face(person, camera);
+}
+
+export function tickLife(people: Citizen[], dt: number, layout: TownLayout, conditions: Conditions = { night: true, rainy: false }) {
+  const thief = people.find(person => person.role === 'thief' && outside(person));
+  if (thief && !conditions.night && (thief.state === 'walking' || thief.state === 'lurking')) {
+    thief.state = 'escaping'; thief.direction = -1;
+  }
+  for (const guard of people) if (guard.role === 'guard') {
+    const seen = thief && thief.opacity > .5 && canSeePoint(guard.position, thief.position, guard.facing, 6.2, layout.plots, 100);
+    guard.pursuit = seen ? 1.2 : Math.max(0, (guard.pursuit ?? 0) - dt);
+    guard.chasing = !!thief && guard.pursuit > 0;
+    if (seen && thief && (thief.state === 'walking' || thief.state === 'lurking')) {
+      thief.state = 'escaping'; thief.direction = -1;
+    }
+  }
+
+  for (const [index, person] of people.entries()) {
+    if (!canTalk(person)) continue;
+    const partner = people.find((other, otherIndex) => otherIndex > index && canTalk(other)
+      && separation(person.position, other.position) <= 1.12
+      && ((person.pair !== undefined && person.pair === other.pair) || person.facing.x * other.facing.x + person.facing.z * other.facing.z < -.25));
+    if (!partner || routeIntersectsPlots([person.position, partner.position], layout.plots, 0)) continue;
+    person.companion = partner; partner.companion = person;
+    person.chattingSecond = false; partner.chattingSecond = true;
+    person.conversationLeft = partner.conversationLeft = CHAT_TIME;
+    person.cooldown = partner.cooldown = 30;
+  }
+
+  for (const person of people) {
+    const p = person;
+    p.cooldown -= dt; p.moving = false; p.yielding = false;
+    p.conversationLeft = Math.max(0, p.conversationLeft - dt);
+    p.conversation += (Number(p.conversationLeft > 0) - p.conversation) * Math.min(1, dt * 6);
+    if (p.conversationLeft > 0 && p.companion) { face(p, p.companion.position); continue; }
+    p.companion = undefined;
+    if ((p.pause ?? 0) > 0 && !p.chasing && p.state !== 'escaping') {
+      p.pause = Math.max(0, p.pause! - dt);
+      if (p.pause > 0) continue;
+    }
+    p.gesture = undefined; p.pause = 0;
+    if (p.role === 'guard' && (p.chasing || p.returning)) {
+      const points = p.returnPoints ??= [];
+      if (p.chasing && thief) {
+        const origin = p.position;
+        if (separation(origin, thief.position) <= CITIZEN_CLEARANCE + .12) face(p, thief.position);
+        else if (walk(p, thief.position, dt * 1.12, people, layout)) {
+          if (!points.length || separation(origin, points.at(-1)!) > .24) points.push(origin);
+          p.returning = true;
+        }
+        continue;
+      }
+      const target = points.at(-1);
+      if (target && separation(p.position, target) >= .015) {
+        walk(p, target, dt * .61, people, layout);
+        continue;
+      }
+      points.pop(); p.returning = points.length > 0;
+      if (p.returning) continue;
+    }
+    if (p.state === 'gone') { p.opacity = 0; continue; }
+    if (p.state === 'entering') {
+      p.timer += dt; p.opacity = 1 - clamp((p.timer - .3) / (DOOR_TIME - .3), 1);
+      if (p.timer >= DOOR_TIME) { p.state = p.role === 'townsperson' && p.stay ? 'resident' : 'inside'; p.timer = 0; }
       continue;
     }
-    if(p.role==='guard'&&(p.chasing||p.returning)){
-      const target=p.chasing&&thief?thief.position:atDistance(p.route,p.metrics.distances,p.distance).position;
-      const dx=target.x-p.position.x,dz=target.z-p.position.z,length=Math.hypot(dx,dz);
-      if(length<0.08&&!p.chasing){p.returning=false;}
-      else if(length>0.15){
-        const step=Math.min(length,dt*(p.chasing?1.15:0.65));
-        const next={x:p.position.x+dx/length*step,z:p.position.z+dz/length*step};
-        const water=layout.regions.some(r=>r.kind==='river'&&pointInPolygon(next,r.polygon));
-        const road=layout.regions.some(r=>r.kind==='road'&&pointInPolygon(next,r.polygon));
-        if(!routeIntersectsPlots([p.position,next],layout.plots,0.16)&&(!water||road)){
-          p.position=next;p.facing={x:dx/length,z:dz/length};p.moving=true;p.returning=true;continue;
-        }
+    if (p.state === 'inside' || p.state === 'resident') {
+      p.timer += dt; p.opacity = 0;
+      const dwell = p.state === 'resident' ? (conditions.night ? 80 : conditions.rainy ? 42 : 16) : (conditions.rainy ? 8 : 4.2);
+      if (p.timer >= dwell && roomAt(p.position, people, p)) {
+        p.state = 'exiting'; p.timer = 0; p.facing = { x: -p.facing.x, z: -p.facing.z };
       }
-      if(p.chasing)continue;
+      continue;
     }
-    if(p.state==='resident'||p.state==='gone') {p.opacity=0;continue;}
-    if(p.state==='entering') {
-      p.timer+=dt;p.opacity=Math.max(0,1-p.timer/0.8);
-      if(p.timer>=0.8){p.state=p.role==='townsperson'&&p.stay?'resident':'inside';p.timer=0;}continue;
+    if (p.state === 'exiting') {
+      p.timer += dt; p.opacity = clamp(p.timer / .75, 1);
+      if (p.timer >= .75) { p.state = p.role === 'thief' ? 'escaping' : 'walking'; p.direction = p.direction === 1 ? -1 : 1; p.timer = 0; }
+      continue;
     }
-    if(p.state==='inside') {p.timer+=dt;if(p.timer>=4.2){p.state='exiting';p.timer=0;}continue;}
-    if(p.state==='exiting') {
-      p.timer+=dt;p.opacity=Math.min(1,p.timer/0.8);
-      if(p.timer>=0.8){p.state=p.role==='thief'?'escaping':'walking';p.direction=p.direction===1?-1:1;p.timer=0;}continue;
+    if (p.state === 'lurking') {
+      p.timer += dt;
+      if (p.timer >= 2.8) { p.state = 'entering'; p.timer = 0; }
+      continue;
     }
-    if(p.state==='lurking') {p.timer+=dt;p.facing={x:Math.sin(p.timer)*0.25,z:-1};if(p.timer>=3.5){p.state='entering';p.timer=0;}continue;}
-    p.moving=true;
-    p.distance+=dt*p.speed*(p.state==='escaping'?2.8:p.chasing?1.9:1)*p.direction;
-    const end=p.metrics.totalDistance;
-    if(p.distance>=end||p.distance<=0) {
-      p.distance=Math.max(0,Math.min(end,p.distance));
-      if(p.role==='thief') {p.state=p.direction===-1?'gone':'lurking';p.timer=0;}
-      else if(p.behavior==='visit') {p.state='entering';p.timer=0;}
-      else p.direction=p.direction===1?-1:1;
+
+    const end = p.metrics.totalDistance;
+    if (p.nextPause !== undefined && p.state === 'walking' && p.role !== 'thief' && p.distance > .8 && p.distance < end - .8) {
+      p.nextPause -= dt;
+      if (p.nextPause <= 0 && people.every(other => other === p || !outside(other) || separation(p.position, other.position) > 1.35)) {
+        p.gesture = p.role === 'traveler' && !conditions.rainy ? 'map' : 'scan';
+        p.pause = p.gesture === 'map' ? 2.8 : 1.65;
+        p.nextPause = 17 + p.speed * 24;
+        continue;
+      }
     }
-    const pose=atDistance(p.route,p.metrics.distances,p.distance);
-    p.position=pose.position;p.facing={x:pose.facing.x*p.direction,z:pose.facing.z*p.direction};
+    const budget = dt * p.speed * (p.state === 'escaping' ? 2.8 : conditions.rainy ? 1.12 : 1);
+    const lookDistance = clamp(p.distance + Math.max(.14, budget) * p.direction, end);
+    const waypoint = atDistance(p.route, p.metrics.distances, lookDistance);
+    const previous = p.position, forward = { x: waypoint.facing.x * p.direction, z: waypoint.facing.z * p.direction };
+    const ahead = (other: Citizen) => (other.position.x - previous.x) * forward.x + (other.position.z - previous.z) * forward.z;
+    if (p.passing && (!outside(p.passing) || ahead(p.passing) < -.24 || separation(previous, p.passing.position) > 1.25)) p.passing = undefined;
+    p.passing ??= people.find(other => other !== p && outside(other) && ahead(other) > .12
+      && separation(previous, other.position) < 1.02);
+    const target = p.passing ? { x: waypoint.position.x + forward.z * .44, z: waypoint.position.z - forward.x * .44 } : waypoint.position;
+    walk(p, target, budget, people, layout, separation(previous, waypoint.position) < .65);
+    if (p.passing) p.yielding = true;
+    const progress = Math.max(0, (p.position.x - previous.x) * forward.x + (p.position.z - previous.z) * forward.z);
+    p.distance = separation(p.position, target) < .012 ? lookDistance : clamp(p.distance + progress * p.direction, end);
+    if (p.role === 'thief') p.opacity = clamp(p.distance / .9, 1);
+    const edge = p.direction === 1 ? end : 0;
+    const exactEnd = p.behavior === 'visit' || p.role === 'thief';
+    if (Math.abs(p.distance - edge) < .15 && separation(p.position, p.route[p.direction === 1 ? p.route.length - 1 : 0]) < (exactEnd ? .025 : .52)) {
+      p.distance = edge; p.timer = 0;
+      p.passing = undefined; p.blockedFor = 0;
+      if (p.role === 'thief') p.state = p.direction === -1 ? 'gone' : 'lurking';
+      else if (p.behavior === 'visit') { p.state = 'entering'; p.facing = { x: 0, z: -1 }; }
+      else p.direction = p.direction === 1 ? -1 : 1;
+    } else {
+      p.blockedFor = progress > budget * .08 ? 0 : (p.blockedFor ?? 0) + dt;
+      if (p.blockedFor > 2.2 + p.speed && p.state === 'walking') {
+        p.blockedFor = 0; p.passing = undefined; p.direction = p.direction === 1 ? -1 : 1;
+        if (p.role === 'thief') { p.state = 'escaping'; p.direction = -1; }
+      }
+    }
   }
+}
+
+function canTalk(person: Citizen) {
+  return (person.role === 'townsperson' || person.role === 'traveler') && person.state === 'walking'
+    && person.conversationLeft <= 0 && person.cooldown <= 0 && !person.pause;
 }

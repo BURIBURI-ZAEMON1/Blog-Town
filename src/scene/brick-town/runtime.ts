@@ -16,8 +16,8 @@ import type { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo.js';
 import { BOARD, buildWorld, randomFor } from './world';
 import { buildFeature, buildFriendHut } from './features';
 import { buildHouse, FLOOR_HEIGHT, GROUND_Y } from './buildings';
-import { buildMinifig } from './minifig';
-import { createLife, tickLife, type Citizen } from './life';
+import { buildMinifig, poseMinifig } from './minifig';
+import { addNightVisitor, createLife, greetCitizen, tickLife } from './life';
 import { weatherIsPrecipitating } from '../../data/town-weather';
 import { blendTownDaylight, daylightStep, getTownDaylight } from '../../data/town-daylight';
 import { SEASON_PROFILES } from '../../data/town-seasons';
@@ -27,7 +27,7 @@ import { createPostNoticeProjector } from './post-notices';
 import type { PostNoticeFrame } from '../../data/town-post-notices';
 import type { TownLayout } from '../../data/town-layout';
 import { clampToTownTerrain, townTerrainBounds } from '../../data/town-outline';
-import type { TownSceneProps } from './types';
+import type { TownCameraPose, TownSceneProps } from './types';
 import { ARTICLE_FOCUS_MS, clampToPanBounds, getArticleFocusPose, getCameraPanBounds, getDragPanDelta } from './view';
 import { configureTownEdgeShadows, edgeCloseAmount, TownEdgeField, townEdgeState, worldEdgeVisibility } from './edge-reveal';
 
@@ -43,7 +43,7 @@ const contactShadowModule=typeof window!=='undefined'&&window.innerWidth>=720
   ? import('./desktop-pipeline').catch(()=>undefined)
   : undefined;
 
-export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:TownSceneProps['posts'],initial:SceneState,callbacks:()=>SceneCallbacks,onFirstFrame?:()=>void) {
+export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:TownSceneProps['posts'],initial:SceneState & Pick<TownSceneProps,'initialCamera'>,callbacks:()=>SceneCallbacks,onFirstFrame?:()=>void) {
   const buildStarted=performance.now();
   const mobile=canvas.clientWidth<720;
   const engine=new Engine(canvas,true,{stencil:true,preserveDrawingBuffer:false,powerPreference:'default'});
@@ -73,15 +73,17 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   scene.imageProcessingConfiguration.toneMappingEnabled=true;
   scene.imageProcessingConfiguration.toneMappingType=ImageProcessingConfiguration.TONEMAPPING_ACES;
   scene.imageProcessingConfiguration.contrast=1.06;
-  const camera=new ArcRotateCamera('diorama-camera',Math.PI*0.68,0.96,36,new Vector3(0,0.2,0),scene);
+  const saved=initial.initialCamera;
+  const camera=new ArcRotateCamera('diorama-camera',Math.PI*0.68,0.96,36,new Vector3(saved?.x??0,saved?.y??0.2,saved?.z??0),scene);
   camera.mode=Camera.ORTHOGRAPHIC_CAMERA;
   camera.minZ=0.1;camera.maxZ=160;
   // Deliberate fixed composition keeps the article frontage readable. Zoom is
   // explicit; a click/touch never gets confused with an orbit gesture.
   const defaultZoom=mobile?1:1.9;
-  let zoom=defaultZoom;
-  const edgeState=townEdgeState(scene);
-  edgeState.close=0;edgeState.lift=initial.reducedMotion?0:1;
+  const clampZoom=(value:number)=>Math.max(0.75,Math.min(2.6,value));
+  let zoom=clampZoom(saved?.zoom??defaultZoom);
+  const getCameraPose=():TownCameraPose=>({x:camera.target.x,y:camera.target.y,z:camera.target.z,zoom});
+  const edgeState=window.matchMedia('(max-width: 720px)').matches?undefined:townEdgeState(scene);
   const clampCameraTarget=()=>{
     const panBounds=getCameraPanBounds(
       townTerrainBounds,camera.alpha,camera.beta,
@@ -118,7 +120,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   shadows.bias=0.00012;shadows.normalBias=0.018;
   // Cache the static town shadow map; refresh for solar movement and transitions.
   shadows.getShadowMap()!.refreshRate=0;
-  configureTownEdgeShadows(shadows,scene);
+  if(edgeState)configureTownEdgeShadows(shadows,scene);
   const worldStarted=performance.now();
   const world=buildWorld(scene,layout,mobile);
   canvas.dataset.worldBuildMs=String(Math.round(performance.now()-worldStarted));
@@ -133,7 +135,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   ];
   const placeById=new Map(places.map(place=>[place.id,place]));
   const placeMeshes=places.flatMap(place=>place.meshes);
-  edgeState.field=new TownEdgeField([
+  if(edgeState)edgeState.field=new TownEdgeField([
     ...world.decor.map(p=>({x:p.x,z:p.z,width:p.radius*2+.8,depth:p.radius*2+.8})),
     ...layout.entities.map(p=>({...p,width:p.width+.8,depth:p.depth+.8})),
     ...houses.map(h=>({...h.plot,width:h.plot.width+.8,depth:h.plot.depth+.8})),
@@ -146,7 +148,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   let seasonChanges=0;
   // Terrain plates cannot cast a useful shadow onto themselves. Excluding that
   // multi-million-instance surface cuts most shadow-map geometry while houses,
-  // trees, props and citizens retain their natural shadows.
+  // trees and props retain their natural shadows.
   for(const m of [...world.shadowCasters,...houseMeshes,...placeMeshes,...seasons.meshes.filter(m=>!m.metadata.thinInstances)])shadows.addShadowCaster(m);
   for(const m of [...world.meshes,...houseMeshes,...placeMeshes])if(!rotorMeshes.has(m)){m.computeWorldMatrix(true);m.freezeWorldMatrix();}
   let glow:import('@babylonjs/core/Layers/glowLayer.js').GlowLayer|undefined;
@@ -173,6 +175,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     // filter outlines from turning whole houses into night lights.
     for(const m of [...world.meshes,...seasons.meshes])glow.addExcludedMesh(m);
     for(const m of houseMeshes)if(!m.metadata.glass)glow.addExcludedMesh(m);
+    for(const figure of figures)for(const mesh of figure.meshes)glow.addExcludedMesh(mesh);
     highlights=new highlightModule.HighlightLayer('article-floor-highlight',scene,{mainTextureRatio:mobile?0.32:0.5});
     highlights.blurHorizontalSize=mobile?0.35:0.55;highlights.blurVerticalSize=mobile?0.35:0.55;highlights.innerGlow=false;
     if(fxaaModule){fxaa=new fxaaModule.FxaaPostProcess('brick-fxaa',1,camera);fxaa.samples=1;}
@@ -201,16 +204,17 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   let townNight=light.night>=.5;
   const lampColor=color('#ffba5b'),windowColor=color('#ffb751');
   const dayGlass=color('#5e97a4'),nightGlass=color('#edbd6d'),overcast=color('#bac4ce');
-  let citizens:Citizen[]=[],figures:ReturnType<typeof buildMinifig>[]=[];
-  function populate() {
-    citizens=createLife(layout,townNight,rainy,randomFor(`${layout.seed}:${townNight}:${weatherSlot}`));
-    rebuildFigures();
-    // Minifigures are tiny at the map scale; omitting their animated shadow-map
-    // passes removes most per-frame shadow draw calls with no visible town loss.
-  }
-  function rebuildFigures() {
-    for(const figure of figures)figure.root.dispose(false,false);
-    figures=citizens.map((p,i)=>buildMinifig(scene,p.role,i,townNight,rainy&&state.season!=='winter'));
+  const citizens=createLife(layout,randomFor(`${layout.seed}:residents`));
+  const figures=citizens.map((person,index)=>buildMinifig(scene,person.role,index,mobile));
+  let nightVisitorSlot=-1;
+  function considerNightVisitor() {
+    if(!townNight||nightVisitorSlot===weatherSlot)return;
+    nightVisitorSlot=weatherSlot;
+    const index=addNightVisitor(citizens,layout,rainy,randomFor(`${layout.seed}:visitor:${weatherSlot}`));
+    if(index===undefined||figures[index])return;
+    const figure=buildMinifig(scene,'thief',index,mobile);
+    figures[index]=figure;
+    if(glow)for(const mesh of figure.meshes)glow.addExcludedMesh(mesh);
   }
   function lighting() {
     lightClock=Date.now();
@@ -237,8 +241,10 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     hemi.intensity=light.sky+cloud*day*.13;
     scene.imageProcessingConfiguration.exposure=light.exposure-cloud*day*.08;
     shadows.setDarkness(1-daylightStep(0,.18,sun.intensity)*.95);
-    edgeState.sunRay=[sun.direction.x,sun.direction.y,sun.direction.z];
-    edgeState.cloudStrength=mobile?0:.4*daylightStep(0,.5,sun.intensity);
+    if(edgeState){
+      edgeState.sunRay=[sun.direction.x,sun.direction.y,sun.direction.z];
+      edgeState.cloudStrength=mobile?0:.4*daylightStep(0,.5,sun.intensity);
+    }
     if(sun.intensity>.001&&!sun.direction.equalsWithEpsilon(shadowDirection,.000001)){
       shadows.getShadowMap()?.resetRefreshCounter();shadowDirection.copyFrom(sun.direction);
     }
@@ -250,7 +256,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     weather.set(SEASON_PROFILES[state.season].precipitation,cloud>.6,state.reducedMotion,daylightStep(.6,1,cloud));
     if(glow)glow.isEnabled=night>.001;
     const nextNight=night>=.5;
-    if(nextNight!==townNight){townNight=nextNight;populate();}
+    if(nextNight!==townNight){townNight=nextNight;considerNightVisitor();}
   }
   function update(next:SceneState) {
     const seasonChanged=next.season!==state.season;
@@ -262,7 +268,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       shadows.getShadowMap()?.resetRefreshCounter();
       articleMeshes=[...houseMeshes,...seasons.articleMeshes];
     }
-    state={...next};if(seasonChanged)rebuildFigures();if(environmentChanged)lighting();
+    state={...next};if(environmentChanged)lighting();
     if(state.reducedMotion)seasons.tick(0,true);
     const nextHighlightSignature=[state.query,state.category??'',state.tag??'',state.hoveredPostId??'',state.hoveredPlaceId??'',state.activePostId??'',state.season].join('\u0000');
     if(highlights && nextHighlightSignature!==highlightSignature) {
@@ -304,7 +310,6 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   let lastHover:string|undefined,lastPickAt=0;
   const pointers=new Map<number,{x:number;y:number;type:string}>();
   let pinch:{startDistance:number;startZoom:number;moved:boolean}|undefined;
-  const clampZoom=(value:number)=>Math.max(0.75,Math.min(2.6,value));
   const distanceBetween=(a:{x:number;y:number},b:{x:number;y:number})=>Math.hypot(a.x-b.x,a.y-b.y);
   const applyZoom=(nextZoom:number)=>{
     const clamped=clampZoom(nextZoom);if(Math.abs(clamped-zoom)<0.0001)return;
@@ -317,12 +322,12 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     camera.orthoBottom=centerY+(camera.orthoBottom!-centerY)*scale;
     zoom=clamped;clampCameraTarget();requestDraw();
   };
-  let focusFlight: { from: { x:number; y:number; z:number; zoom:number }; to: Vector3; started:number; onComplete:()=>void; onCancel?:()=>void } | undefined;
+  let focusFlight: { from: TownCameraPose; to: Vector3; started:number; onComplete:()=>void; onCancel?:()=>void } | undefined;
   function cancelFocus(){if(!focusFlight)return;const cancel=focusFlight.onCancel;focusFlight=undefined;delete canvas.dataset.focusPost;delete canvas.dataset.focusProgress;cancel?.();}
   function focusTarget(id:string,to:Vector3,onComplete:()=>void,onCancel?:()=>void){
-    if(disposed||!inView||!visible||!firstFramePublished)return false;
+    if(disposed||!inView||!visible||!firstFramePublished||state.reducedMotion)return false;
     cancelFocus();
-    focusFlight={from:{x:camera.target.x,y:camera.target.y,z:camera.target.z,zoom},to,started:performance.now(),onComplete,onCancel};
+    focusFlight={from:getCameraPose(),to,started:performance.now(),onComplete,onCancel};
     canvas.dataset.focusPost=id;canvas.dataset.focusProgress='0';
     canvas.dataset.focusDurationMs=String(ARTICLE_FOCUS_MS);
     clearHover();requestDraw();
@@ -330,14 +335,12 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   }
   function focusPost(id:string,onComplete:()=>void){
     const house=houseByPostId.get(id);
-    if(window.matchMedia('(max-width: 720px)').matches||state.reducedMotion||!house)return false;
+    if(!house)return false;
     return focusTarget(id,new Vector3(house.plot.x,GROUND_Y+house.ids.length*FLOOR_HEIGHT*.5,house.plot.z),onComplete);
   }
   function focusPlace(id:string,onComplete:()=>void,onCancel?:()=>void){
     const place=placeById.get(id);if(!place)return false;
-    const to=new Vector3(place.x,GROUND_Y+place.anchorY*.5,place.z);
-    if(state.reducedMotion||mobile){applyZoom(Math.max(zoom,2.35));camera.target.copyFrom(to);requestDraw();onComplete();return true;}
-    return focusTarget(id,to,onComplete,onCancel);
+    return focusTarget(id,new Vector3(place.x,GROUND_Y+place.anchorY*.5,place.z),onComplete,onCancel);
   }
   function pick(event:PointerEvent){
     const rect=canvas.getBoundingClientRect(),x=event.clientX-rect.left,y=event.clientY-rect.top;
@@ -345,6 +348,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     // a hidden wall can never be clicked through another object.
     const pickable=(m:import('@babylonjs/core/Meshes/abstractMesh.js').AbstractMesh)=>{
       if(!m.isPickable||!m.isVisible)return false;
+      if(m.metadata?.citizen!==undefined)return !state.reducedMotion&&m.visibility>.55;
       const house=houseByPostId.get(m.metadata?.postId);
       return !house||worldEdgeVisibility(scene,house.plot.x,0,house.plot.z)>.2;
     };
@@ -360,7 +364,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     // An invisible tree must not occlude a visible article behind its footprint.
     if(hit?.hit&&!revealed(hit))hit=scene.multiPick(x,y,pickable)?.sort((a,b)=>a.distance-b.distance).find(revealed)??null;
     const data=hit?.hit?hit.pickedMesh?.metadata:undefined;
-    return data?.friendId?`friend:${data.friendId}`:data?.featureId?`feature:${data.featureId}`:data?.postId as string|undefined;
+    return data?.citizen!==undefined?`citizen:${data.citizen}`:data?.friendId?`friend:${data.friendId}`:data?.featureId?`feature:${data.featureId}`:data?.postId as string|undefined;
   }
   const onWheel=(e:WheelEvent)=>{e.preventDefault();if(focusFlight){if(!focusFlight.onCancel)return;cancelFocus();}applyZoom(zoom-e.deltaY*0.0015);clearHover();};
   const onMove=(e:PointerEvent)=>{
@@ -393,7 +397,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     if(e.pointerType!=='mouse')return;
     const now=performance.now();if(now-lastPickAt<32)return;lastPickAt=now;
     const id=pick(e);canvas.style.cursor=id?'pointer':'grab';
-    if(id!==lastHover){lastHover=id;const place=id?.startsWith('friend:')?id:id?.startsWith('feature:')?id.slice(8):undefined;callbacks().onHoverPost(place?undefined:id,id?{x:e.clientX,y:e.clientY}:undefined);callbacks().onHoverPlace?.(place,id?{x:e.clientX,y:e.clientY}:undefined);}
+    if(id!==lastHover){lastHover=id;const place=id?.startsWith('friend:')?id:id?.startsWith('feature:')?id.slice(8):undefined;callbacks().onHoverPost(place||id?.startsWith('citizen:')?undefined:id,id?{x:e.clientX,y:e.clientY}:undefined);callbacks().onHoverPlace?.(place,id?{x:e.clientX,y:e.clientY}:undefined);}
   };
   const onLeave=(e:PointerEvent)=>{if(e.pointerType!=='mouse')return;clearHover();if(!down)canvas.style.cursor='grab';};
   let down:{x:number;y:number;lastX:number;lastY:number;pointerId:number;moved:boolean}|undefined;
@@ -423,8 +427,9 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
     if(!down||e.pointerId!==down.pointerId){releasePointer(e.pointerId);return;}
     if(select&&!down.moved&&Math.hypot(e.clientX-down.x,e.clientY-down.y)<7){
       const id=pick(e);
-      if(id?.startsWith('friend:'))callbacks().onSelectPlace?.(id);
-      else if(id?.startsWith('feature:'))callbacks().onSelectPlace?.(id.slice(8));
+      if(id?.startsWith('friend:'))callbacks().onSelectPlace?.(id,e.pointerType);
+      else if(id?.startsWith('feature:'))callbacks().onSelectPlace?.(id.slice(8),e.pointerType);
+      else if(id?.startsWith('citizen:')){greetCitizen(citizens[Number(id.slice(8))],camera.position);clearHover();}
       else if(id)callbacks().onSelectPost(id,e.pointerType);
       else {clearHover();}
     }
@@ -434,27 +439,42 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const onUp=(e:PointerEvent)=>finishPointer(e,true);
   const onCancel=(e:PointerEvent)=>finishPointer(e,false);
   canvas.addEventListener('wheel',onWheel,{passive:false});canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerleave',onLeave);canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onCancel);
-  populate();lighting();update(initial);
+  considerNightVisitor();lighting();update(initial);
   scene.blockMaterialDirtyMechanism=false;
   canvas.dataset.sceneBuildMs=String(Math.round(performance.now()-buildStarted));
   const resize=new ResizeObserver(()=>{fit(true);if(state.hoveredPostId)anchor(state.hoveredPostId);});resize.observe(canvas.parentElement!);
   let lastDiagnostics=0,slowRenderFrames=0,firstFramePublished=false,lastRotorShadow=0;
   let edgeHighlightSignature='';
-  const edgeTransform=Matrix.Zero();
+  const viewTransform=Matrix.Zero();
   let edgeZoom=zoom,edgeInitialized=false,edgeWasReduced=state.reducedMotion;
+  let restoreEdge: ((transform: Matrix) => boolean) | undefined;
+  function captureReturnView(pose:TownCameraPose){
+    const projection=edgeState&&viewTransform.clone(), restoreFootprint=edgeState?.field.saveFootprint();
+    return ()=>{
+      applyZoom(pose.zoom);
+      camera.target.set(pose.x,pose.y,pose.z);
+      clampCameraTarget();
+      delete canvas.dataset.focusPost;delete canvas.dataset.focusProgress;
+      if(projection&&restoreFootprint)restoreEdge=(transform)=>{
+        if(!transform.m.every((value,i)=>Math.abs(value-projection.m[i])<1e-6))return false;
+        restoreFootprint();return true;
+      };
+      requestDraw();
+    };
+  }
   function publishDiagnostics(now:number){
     canvas.dataset.ready='true';canvas.dataset.frames=String(frames);canvas.dataset.weather=rainy?weather.kind:'clear';canvas.dataset.season=state.season;canvas.dataset.colorMode=state.colorMode;canvas.dataset.reducedMotion=String(state.reducedMotion);canvas.dataset.seasonChanges=String(seasonChanges);canvas.dataset.seasonCover=String(seasons.coverCount);canvas.dataset.seasonTransition=String(seasons.transitioning);canvas.dataset.precipitationAnimated=String(weather.animated);canvas.dataset.renderer=engine.webGLVersion===2?'webgl2':'webgl1';
     canvas.dataset.cameraX=camera.target.x.toFixed(2);canvas.dataset.cameraY=camera.target.y.toFixed(2);canvas.dataset.cameraZ=camera.target.z.toFixed(2);canvas.dataset.zoom=zoom.toFixed(3);canvas.dataset.rainDrops=String(weather.count);
     canvas.dataset.sceneMeshes=String(scene.meshes.length);canvas.dataset.sceneMaterials=String(scene.materials.length);canvas.dataset.sceneVertices=String(scene.getTotalVertices());canvas.dataset.thinInstances=String(scene.meshes.reduce((sum,mesh)=>sum+('thinInstanceCount' in mesh?Number(mesh.thinInstanceCount):0),0));lastDiagnostics=now;
-    canvas.dataset.edgeReveal=edgeState.close.toFixed(3);
-    canvas.dataset.edgeAnimating=String(edgeState.field.animating);
+    canvas.dataset.edgeReveal=edgeState?edgeCloseAmount(zoom,defaultZoom).toFixed(3):'0.000';
+    canvas.dataset.edgeAnimating=String(edgeState?.field.animating??false);
     canvas.dataset.solarHour=light.hour.toFixed(3);canvas.dataset.townNight=String(townNight);
     canvas.dataset.sunDirection=sun.direction.asArray().map(v=>v.toFixed(4)).join(',');canvas.dataset.sunIntensity=sun.intensity.toFixed(4);
     canvas.dataset.skyIntensity=hemi.intensity.toFixed(4);canvas.dataset.windowLight=light.night.toFixed(4);
     canvas.dataset.cloud=light.cloud.toFixed(4);canvas.dataset.lightTransition=String(now<lightUntil);
     canvas.dataset.lightCount=String(scene.lights.length);canvas.dataset.canvasBackground=scene.clearColor.toHexString();
     canvas.dataset.studioReflections=String(!!scene.environmentTexture);canvas.dataset.cloudShadows=mobile?'off':'on';
-    canvas.dataset.cloudShadowStrength=edgeState.cloudStrength.toFixed(3);
+    canvas.dataset.cloudShadowStrength=(edgeState?.cloudStrength??0).toFixed(3);
   }
   function render(){
     if(disposed||!inView||!visible)return;
@@ -470,59 +490,60 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       canvas.dataset.focusProgress=String(Math.min(1,age/ARTICLE_FOCUS_MS));
       if(age>=ARTICLE_FOCUS_MS){completedFocus=focusFlight.onComplete;focusFlight=undefined;}
     }
-    edgeState.close=edgeCloseAmount(zoom,defaultZoom);
-    edgeState.lift=state.reducedMotion?0:1;
-    // Keep the portrait landing compact; blend back to the distant footprint.
-    const portraitEdge=mobile&&canvas.clientHeight>canvas.clientWidth?Math.max(0,Math.min(1,(zoom/defaultZoom-.75)/.25)):0;
-    edgeState.inset=mobile?.065-.03*portraitEdge:0;
     scene.updateTransformMatrix();
     const transform=scene.getTransformMatrix();
-    const edgeRevision=edgeState.field.revision;
-    // Advance existing motion before assigning new targets, so the elapsed
-    // time before a zoom cannot consume its entire retreat on the first frame.
-    let edgeMoved=edgeState.field.tick(Math.min(.05,frameSeconds),state.reducedMotion);
-    const edgeChanged=!edgeInitialized||edgeZoom!==zoom||!transform.equals(edgeTransform);
-    if(edgeChanged){
-      // Panning can discover new ground, but never withdraws an already revealed
-      // piece. Both zoom directions settle into the same solid brick footprint.
-      edgeState.field.retarget(transform.m,edgeState.inset,zoom!==edgeZoom,state.reducedMotion||!edgeInitialized,!edgeInitialized,edgeInitialized&&zoom>edgeZoom,[1-.08*portraitEdge,1+.12*portraitEdge]);
-      edgeTransform.copyFrom(transform);edgeZoom=zoom;edgeInitialized=true;
-      edgeMoved=edgeState.field.tick(0,state.reducedMotion)||edgeMoved;
+    const viewChanged=!transform.equals(viewTransform);
+    let edgeMoved=false;
+    if(edgeState){
+      edgeState.lift=state.reducedMotion?0:1;
+      edgeState.cloudTime=state.reducedMotion?0:elapsed;
+      const edgeRevision=edgeState.field.revision;
+      // Advance existing motion before assigning new targets, so the elapsed
+      // time before a zoom cannot consume its entire retreat on the first frame.
+      edgeMoved=!restoreEdge&&edgeState.field.tick(dt,state.reducedMotion);
+      if(restoreEdge||!edgeInitialized||edgeZoom!==zoom||viewChanged){
+        if(!restoreEdge?.(transform)){
+          // If the projection changed while away, fit its new footprint before drawing.
+          const initial=!edgeInitialized||!!restoreEdge;
+          const portrait=mobile&&canvas.clientHeight>canvas.clientWidth?Math.max(0,Math.min(1,(zoom/defaultZoom-.75)/.25)):0;
+          edgeState.field.retarget(transform.m,mobile?.065-.03*portrait:0,zoom!==edgeZoom,state.reducedMotion||initial,initial,!initial&&zoom>edgeZoom,[1-.08*portrait,1+.12*portrait]);
+        }
+        restoreEdge=undefined;
+        edgeZoom=zoom;edgeInitialized=true;
+        edgeMoved=edgeState.field.tick(0,state.reducedMotion)||edgeMoved;
+      }
+      if(edgeRevision!==edgeState.field.revision){
+        edgeMoved=true;edgeState.texture.update(edgeState.field.data);shadows.getShadowMap()?.resetRefreshCounter();
+      }
+      if(edgeWasReduced!==state.reducedMotion){edgeWasReduced=state.reducedMotion;shadows.getShadowMap()?.resetRefreshCounter();}
+      const edgeHighlights=houses.map(house=>Number(worldEdgeVisibility(scene,house.plot.x,0,house.plot.z)>.01)).join('');
+      if(edgeHighlights!==edgeHighlightSignature){edgeHighlightSignature=edgeHighlights;highlightSignature='';if(effectsReady)update(state);}
     }
-    if(edgeRevision!==edgeState.field.revision){edgeState.texture.update(edgeState.field.data);shadows.getShadowMap()?.resetRefreshCounter();}
-    if(edgeWasReduced!==state.reducedMotion){edgeWasReduced=state.reducedMotion;shadows.getShadowMap()?.resetRefreshCounter();}
-    const edgeHighlights=houses.map(house=>Number(worldEdgeVisibility(scene,house.plot.x,0,house.plot.z)>.01)).join('');
-    if(edgeHighlights!==edgeHighlightSignature){edgeHighlightSignature=edgeHighlights;highlightSignature='';if(effectsReady)update(state);}
+    if(viewChanged)viewTransform.copyFrom(transform);
     const slot=Math.floor(Date.now()/900000);
-    if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsPrecipitating(layout.seed,slot);populate();lighting();}
+    if(slot!==weatherSlot){weatherSlot=slot;rainy=weatherIsPrecipitating(layout.seed,slot);lighting();considerNightVisitor();}
     if(Math.abs(Date.now()-lightClock)>=1000)lighting();
     else if(light!==lightTarget&&(now-lastLightAt>=100||now>=lightUntil))applyLighting(now);
     if(!state.reducedMotion){
-      tickLife(citizens,dt,layout);
+      tickLife(citizens,dt,layout,{night:townNight,rainy});
       for(const model of features)model.rotor.rotation.z=(model.rotor.rotation.z+dt*Math.PI/22.5)%(Math.PI*2);
       // Refresh moving sail shadows four times a second, retaining the town cache.
       if(features.length&&now-lastRotorShadow>=250){shadows.getShadowMap()?.resetRefreshCounter();lastRotorShadow=now;}
     }
     citizens.forEach((p,i)=>{
-      const f=figures[i];f.root.position.set(p.position.x,0.10,p.position.z);
+      const f=figures[i];f.root.position.set(p.position.x,GROUND_Y,p.position.z);
       // Raised bridge follows its real deck, with short ramps at both ends.
       if(world.bridge){const b=world.bridge,dx=p.position.x-b.x,dz=p.position.z-b.z,c=Math.cos(b.rotationY),s=Math.sin(b.rotationY),along=dx*c-dz*s,across=dx*s+dz*c;if(Math.abs(across)<0.85&&Math.abs(along)<2.2)f.root.position.y=0.10+0.12*Math.min(1,(2.2-Math.abs(along))/0.3);}
-      if(p.state==='entering')f.root.position.z-=0.32*Math.min(1,p.timer/0.8);
-      if(p.state==='exiting')f.root.position.z-=0.32*(1-Math.min(1,p.timer/0.8));
-      // Conversation pose is derived from the base route position each frame,
-      // never accumulated into the agent's navigation coordinates.
-      if(p.conversation>0){const side=i%2?1:-1;f.root.position.x+=side*0.09*p.conversation;}
-      f.root.rotation.y=Math.atan2(p.facing.x,p.facing.z);
-      const step=p.moving&&!state.reducedMotion?Math.sin(elapsed*9+i)*0.36:0;
-      f.limbs[0].rotation.x=step;f.limbs[1].rotation.x=-step;f.limbs[2].rotation.x=-step*0.6;f.limbs[3].rotation.x=step*0.6;
+      poseMinifig(f,p,dt,elapsed,state.reducedMotion,townNight,rainy&&state.season!=='winter');
       const edge=Math.min(p.position.x-BOARD.minX,BOARD.maxX-p.position.x,p.position.z-BOARD.minZ,BOARD.maxZ-p.position.z);
       const revealed=worldEdgeVisibility(scene,p.position.x,0,p.position.z);
-      for(const m of f.meshes)m.visibility=p.opacity*Math.max(0,Math.min(1,edge/0.5))*revealed;
+      const opacity=p.opacity*Math.max(0,Math.min(1,edge/0.5))*revealed;
+      f.root.setEnabled(opacity>.001);
+      for(const m of f.meshes)m.visibility=opacity;
     });
     weather.tick(dt);seasons.tick(dt,state.reducedMotion);
-    edgeState.cloudTime=state.reducedMotion?0:elapsed;
     if(state.season!=='winter')for(const m of world.glints)m.visibility=daylightStep(.05,.8,sun.intensity)*(state.reducedMotion?.65:.65+Math.sin(elapsed*1.5)*.15);
-    if(state.hoveredPlaceId&&edgeChanged)anchorPlace(state.hoveredPlaceId);
+    if(state.hoveredPlaceId&&viewChanged)anchorPlace(state.hoveredPlaceId);
     const renderStarted=performance.now();scene.render();const renderCost=performance.now()-renderStarted;frames++;
     const noticeFrame=postNotices.project(state.newPostIds, state.guidePostId, canvas.clientWidth, canvas.clientHeight);
     if(noticeFrame)callbacks().onResolveNewPostAnchors?.(noticeFrame);
@@ -535,7 +556,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
       window.setTimeout(()=>{void initVisualEffects();},mobile?350:0);
     }
     if(ao&&renderCost>55){slowRenderFrames++;if(slowRenderFrames>=4){ao.dispose();ao=undefined;canvas.dataset.adaptiveAo='off';}}else slowRenderFrames=Math.max(0,slowRenderFrames-1);
-    if(frames===1||focusFlight||completedFocus||edgeChanged||edgeMoved||now-lastDiagnostics>500)publishDiagnostics(now);
+    if(frames===1||focusFlight||completedFocus||viewChanged||edgeMoved||now-lastDiagnostics>500)publishDiagnostics(now);
     completedFocus?.();
     if(state.reducedMotion&&--renderBurst<=0&&now>=lightUntil&&firstFramePublished&&effectsReady&&scene.isReady()&&engine.areAllEffectsReady()){
       engine.stopRenderLoop(render);canvas.dataset.renderLoop='idle';publishDiagnostics(now);
@@ -548,7 +569,7 @@ export function mountBrickTown(canvas:HTMLCanvasElement,layout:TownLayout,posts:
   const onVisibility=()=>{visible=!document.hidden;syncVisibility();if(!visible&&focusFlight){const complete=focusFlight.onCancel?undefined:focusFlight.onComplete;cancelFocus();complete?.();}};document.addEventListener('visibilitychange',onVisibility);
   engine.runRenderLoop(render);
   return {
-    update,anchor,focusPost,focusPlace,cancelFocus,
+    update,anchor,getCameraPose,captureReturnView,focusPost,focusPlace,cancelFocus,
     dispose(){cancelFocus();disposed=true;window.clearTimeout(weatherWakeTimer);engine.stopRenderLoop(render);resize.disconnect();observer.disconnect();document.removeEventListener('visibilitychange',onVisibility);canvas.removeEventListener('wheel',onWheel);canvas.removeEventListener('pointermove',onMove);canvas.removeEventListener('pointerleave',onLeave);canvas.removeEventListener('pointerdown',onDown);canvas.removeEventListener('pointerup',onUp);canvas.removeEventListener('pointercancel',onCancel);pointers.clear();pinch=undefined;down=undefined;ao?.dispose();seasons.dispose();weather.dispose();scene.dispose();engine.dispose();},
   };
 }

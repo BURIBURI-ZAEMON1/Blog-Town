@@ -1,4 +1,5 @@
 import { createPrecipitationField } from '../../data/town-weather';
+import type { TownCameraPose } from './types';
 
 export type BoardBounds = { minX: number; maxX: number; minZ: number; maxZ: number };
 export type PanBounds = { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -7,10 +8,9 @@ export type RainDrop = { x: number; z: number; y: number; speed: number };
 
 export const ARTICLE_FOCUS_MS = 760;
 export const ARTICLE_FOCUS_ZOOM = 2.35;
-type FocusPose = { x: number; y: number; z: number; zoom: number };
 const easeFocus = (t: number) => t * t * t * (10 + t * (-15 + 6 * t));
 
-export function getArticleFocusPose(from: FocusPose, to: Omit<FocusPose, 'zoom'>, elapsedMs: number): FocusPose {
+export function getArticleFocusPose(from: TownCameraPose, to: Omit<TownCameraPose, 'zoom'>, elapsedMs: number): TownCameraPose {
   const t = Math.max(0, Math.min(1, elapsedMs / ARTICLE_FOCUS_MS));
   const endZoom = Math.max(from.zoom, ARTICLE_FOCUS_ZOOM);
   if (t === 0) return { ...from };
