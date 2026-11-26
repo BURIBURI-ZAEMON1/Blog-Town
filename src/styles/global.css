@@ -1507,7 +1507,7 @@ body { font-family: var(--sans); }
 .sidebar-content-scroll .profile-panel { min-height: 0; }
 .sidebar-content-scroll .sidebar-posts { max-height: none; overflow: visible; }
 .sidebar-content-scroll.is-profile { display: flex; flex-direction: column; }
-.sidebar-content-scroll.is-profile .profile-panel { margin-top: auto; }
+.sidebar-content-scroll.is-profile .profile-panel { flex: 0 0 auto; margin-top: auto; }
 
 .topnav { grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 16px; padding-inline: clamp(24px, 4vw, 52px); }
 .top-wordmark { text-transform: uppercase; }

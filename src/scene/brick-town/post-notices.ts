@@ -4,7 +4,7 @@ import type { Scene } from '@babylonjs/core/scene.js';
 import type { PostNoticeFrame } from '../../data/town-post-notices';
 import type { buildHouse } from './buildings';
 import { FLOOR_HEIGHT, GROUND_Y } from './buildings';
-import { townEdgeState, worldEdgeVisibility } from './edge-reveal';
+import { townEdgeRevision, worldEdgeVisibility } from './edge-reveal';
 
 const NO_IDS: readonly string[] = [];
 
@@ -22,7 +22,7 @@ export function createPostNoticeProjector(scene: Scene, camera: Camera, houses: 
     /** Call after scene.render(), when Babylon has updated the camera transform. */
     project(ids: readonly string[] = NO_IDS, guidePostId: string | undefined, width: number, height: number): PostNoticeFrame | undefined {
       const transform = scene.getTransformMatrix();
-      const edge = townEdgeState(scene).field.revision;
+      const edge = townEdgeRevision(scene);
       if (edge === lastEdge && ids === lastIds && guidePostId === lastGuideId && width === lastWidth && height === lastHeight && ((!ids.length && !guidePostId) || transform.equals(lastTransform))) return;
       lastEdge = edge;
       lastIds = ids; lastGuideId = guidePostId; lastWidth = width; lastHeight = height; lastTransform.copyFrom(transform);

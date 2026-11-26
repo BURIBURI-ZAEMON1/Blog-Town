@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import type { TownCameraPose } from '../scene/brick-town/types';
 
 export type MainSurface = 'town' | 'article' | 'archive' | 'about';
-export interface ReadingSnapshot {
+interface NavigationSnapshot {
   scrollTop: number;
   collapsed: string[];
   embeds: string[];
   details: boolean[];
+  camera?: TownCameraPose;
 }
 export interface TownNavigation {
   surface: MainSurface;
   postId?: string;
   hash: string;
   revision: number;
-  restore?: ReadingSnapshot;
+  restore?: NavigationSnapshot;
 }
 
-function captureReading(root: HTMLElement | null): ReadingSnapshot {
+function captureReading(root: HTMLElement | null): NavigationSnapshot {
   const article = root?.querySelector('.article-page');
   return {
     scrollTop: root?.scrollTop ?? 0,
@@ -27,19 +29,21 @@ function captureReading(root: HTMLElement | null): ReadingSnapshot {
   };
 }
 
-// All article content is already present in the page data. Internal links can
-// change views immediately, keeping the town/sidebar and their state mounted.
-export function useTownNavigation(posts: { id: string }[], root: RefObject<HTMLElement | null>, initialSurface: MainSurface, initialPostId?: string) {
+export function useTownNavigation(posts: { id: string }[], root: RefObject<HTMLElement | null>, getTownCamera: () => TownCameraPose | undefined, initialSurface: MainSurface, initialPostId?: string) {
   const [navigation, setNavigation] = useState<TownNavigation>({ surface: initialSurface, postId: initialPostId, hash: '', revision: 0 });
   const currentKey = useRef('');
-  const positions = useRef(new Map<string, ReadingSnapshot>());
+  const lastTownKey = useRef('');
+  const positions = useRef(new Map<string, NavigationSnapshot>());
   const remember = useCallback((persist = true) => {
     if (!currentKey.current) return;
     const snapshot = captureReading(root.current);
-    positions.current.set(currentKey.current, snapshot);
+    const camera = getTownCamera();
+    // Keep the camera in memory so refreshing the page still opens the default view.
+    positions.current.set(currentKey.current, camera ? { ...snapshot, camera } : snapshot);
+    if (camera) lastTownKey.current = currentKey.current;
     if (positions.current.size > 80) positions.current.delete(positions.current.keys().next().value!);
     if (persist) window.history.replaceState({ ...window.history.state, townNavigation: { key: currentKey.current, snapshot } }, '', window.location.href);
-  }, [root]);
+  }, [getTownCamera, root]);
   const readRoute = useCallback((url: URL) => {
     const parts = url.pathname.split('/').filter(Boolean);
     if (parts.length === 1 && parts[0] === 'about') return { surface: 'about' as const };
@@ -58,13 +62,16 @@ export function useTownNavigation(posts: { id: string }[], root: RefObject<HTMLE
   const goTo = useCallback((url: URL) => {
     const route = readRoute(url);
     if (!route) return;
+    const source = readRoute(new URL(window.location.href))?.surface;
+    const restore = route.surface === 'town' && (source === 'archive' || source === 'about')
+      ? positions.current.get(lastTownKey.current) : undefined;
     remember();
     if (url.href !== window.location.href) {
       const key = window.crypto.randomUUID();
       window.history.pushState({ ...route, townNavigation: { key } }, '', url.href);
       currentKey.current = key;
     }
-    setNavigation((previous) => ({ ...route, hash: url.hash, revision: previous.revision + 1 }));
+    setNavigation((previous) => ({ ...route, hash: url.hash, restore, revision: previous.revision + 1 }));
   }, [readRoute, remember]);
 
   useEffect(() => {
@@ -78,8 +85,8 @@ export function useTownNavigation(posts: { id: string }[], root: RefObject<HTMLE
     const onPopState = () => {
       // The browser has already activated the destination entry. Cache the
       // outgoing view without replacing the destination's history state.
-      remember(false);
       const route = readRoute(new URL(window.location.href));
+      remember(false);
       if (!route) return;
       const entry = window.history.state?.townNavigation;
       currentKey.current = entry?.key ?? window.crypto.randomUUID();
@@ -89,19 +96,19 @@ export function useTownNavigation(posts: { id: string }[], root: RefObject<HTMLE
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const link = (event.target as Element | null)?.closest<HTMLAnchorElement>('a[href]');
-      if (!link || (link.target && link.target !== '_self') || link.hasAttribute('download') || link.hasAttribute('data-astro-reload')) return;
+      if (!link || !root.current?.contains(link) || (link.target && link.target !== '_self') || link.hasAttribute('download') || link.hasAttribute('data-astro-reload')) return;
       const url = new URL(link.href, window.location.href);
       if (url.origin !== window.location.origin || url.search || !readRoute(url)) return;
       event.preventDefault();
       goTo(url);
     };
     const onPageHide = () => remember();
-    const element = root.current;
-    element?.addEventListener('click', onClick);
+    // Let React's links start their camera flight before handling raw article HTML links.
+    document.addEventListener('click', onClick);
     window.addEventListener('popstate', onPopState);
     window.addEventListener('pagehide', onPageHide);
     return () => {
-      element?.removeEventListener('click', onClick);
+      document.removeEventListener('click', onClick);
       window.removeEventListener('popstate', onPopState);
       window.removeEventListener('pagehide', onPageHide);
       window.history.scrollRestoration = oldRestoration;

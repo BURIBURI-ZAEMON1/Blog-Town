@@ -6,7 +6,7 @@ import type { mountBrickTown } from '../scene/brick-town/runtime';
 import TownPostNotices from './TownPostNotices';
 import type { PostNoticeFrame } from '../data/town-post-notices';
 export type { TownPost, TownPostSummary, TownPostContent, SceneAnchor } from '../scene/brick-town/types';
-export type TownSceneHandle = Pick<ReturnType<typeof mountBrickTown>, 'focusPost' | 'focusPlace' | 'cancelFocus'>;
+export type TownSceneHandle = Pick<ReturnType<typeof mountBrickTown>, 'getCameraPose' | 'captureReturnView' | 'focusPost' | 'focusPlace' | 'cancelFocus'>;
 
 type TownSceneLifecycleProps = TownSceneProps & {
   sceneRef?: RefObject<TownSceneHandle | null>;
