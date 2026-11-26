@@ -1,607 +1,180 @@
-# 积木小镇博客框架
+# 积木小镇博客使用指南
 
-这是一个基于 **Astro + React + Babylon.js** 的静态博客框架。文章会在首页的小镇中生成对应建筑；同一系列的文章会组成同一栋建筑的不同楼层。
+文章会生成小镇建筑，同一系列的文章共用建筑的不同楼层；正文、档案和 RSS 在构建时生成。
 
-当前仓库已经完成模板化清理：原博客的文章、站点名称、作者资料、联系方式、友链、Logo、头像、文章图片与附件均已移除。仓库中保留的 Logo、头像和 favicon 仅为通用占位图，使用前请替换。
+本仓库是可自行配置的博客框架；站点名称、作者资料和图片是占位内容，默认没有文章。首次使用请填写 `src/config/site.ts`，替换 `public/assets/profile/` 的占位图片。
 
-## 1. 快速开始
+## 快速开始
 
-环境要求：Node.js 22.12 或更高版本（Astro 7 要求）。
+需要 Node.js 22.12.0 或更高版本。在仓库根目录运行：
 
 ```bash
 npm install
 npm run dev
 ```
 
-开发服务器启动后，根据终端输出访问本地地址。
+按终端给出的地址打开网站。完成修改后运行 `npm run verify`；部署前运行 `npm run build`，静态结果在 `dist/`。可用 `npm run preview` 检查构建后的页面。开发服务器的加载时间不代表生产构建的表现。
 
-提交或部署前建议运行完整检查：
+## 站点资料与图片
 
-```bash
-npm run verify
-```
+在 `src/config/site.ts` 中维护网站名称、简介、正式网址、作者资料和链接。其中 `siteUrl` 必须是含 `https://` 或 `http://` 的完整地址，供 canonical、分享卡片、RSS 和正式域名统计使用。`townSeed` 控制建筑布局；已发布内容保持它不变，可避免重排。
 
-生成静态站点：
+`public/` 内的文件从站点根路径引用。例如 `public/assets/posts/my-post/photo.webp` 写成 `/assets/posts/my-post/photo.webp`。常用目录：
 
-```bash
-npm run build
-```
-
-构建结果会输出到 `dist/`。
-
-## 2. 必须先填写的站点信息
-
-所有站点与作者信息集中在：
-
-```text
-src/config/site.ts
-```
-
-文件中每个需要填写的位置都附有行内注释。至少应修改以下字段：
-
-| 字段 | 用途 |
+| 路径 | 内容 |
 | --- | --- |
-| `title` | 完整网站名称，显示在侧边栏、浏览器标题和分享信息中 |
-| `shortTitle` | 顶部导航和文章页脚使用的网站简称 |
-| `tagline` | 网站副标题或英文名 |
-| `description` | 网站简介，同时用于 SEO 与社交分享摘要 |
-| `siteUrl` | 部署后的完整网址，例如 `https://blog.example.com/` |
-| `language` | 页面语言，例如 `zh-CN` 或 `en-US` |
-| `profile.name` | 作者名称 |
-| `profile.headline` | 一句话介绍 |
-| `profile.bio` | 作者简介 |
-| `copyright` | 页面底部版权文字 |
+| `public/assets/profile/` | 站点 Logo、作者头像 |
+| `public/assets/links/` | 相关网站图标（预置图标见该目录） |
+| `public/assets/friends/` | 友链头像、站点 Logo |
+| `public/assets/posts/<文章源文件 ID>/` | 封面、正文图片、附件 |
 
-`townSeed` 是可选的小镇布局随机种子。修改它会改变文章建筑的位置与外观；如果希望站点每次构建保持相同布局，请保持该值稳定。
+替换图片后若扩展名改变，记得同步修改 `site.ts` 或文章中的路径。浏览器图标为 `public/favicon.svg`，由 `src/layouts/TownAppPage.astro` 引用。
 
-> `siteUrl` 必须是包含协议的合法绝对地址。文章 canonical URL、Open Graph URL 和侧边栏网站链接都会使用它。
+### 相关网站与友链
 
-## 3. 图片与静态资产放置位置
+`siteConfig.profile.links` 显示作者的相关网站。模板中的预置平台以注释形式列在 `site.ts`；选中平台，取消注释并修改 `url` 即可。自定义平台也可添加一行：
 
-所有可直接访问的静态文件都放在 `public/` 中。代码或 Markdown 中引用时，不写 `public`，从 `/` 开始填写路径。
-
-| 资产 | 默认位置 | 配置位置 |
-| --- | --- | --- |
-| 网站 Logo | `public/assets/profile/logo.svg` | `siteConfig.logo` |
-| 作者头像 | `public/assets/profile/avatar.svg` | `siteConfig.profile.avatar` |
-| 浏览器图标 | `public/favicon.svg` | `src/layouts/TownAppPage.astro` |
-| 相关网站 Logo | `public/assets/links/` | `siteConfig.profile.links` |
-| 友链头像或站点 Logo | `public/assets/friends/` | `friendLinks` |
-| 文章封面、正文图片和附件 | `public/assets/posts/<文章 ID>/` | 文章 Markdown |
-
-可以继续使用 PNG、JPEG、WebP、SVG 等常见图片格式。替换图片后，如果扩展名发生变化，也要同步修改配置路径。
-
-推荐的文章资产结构：
-
-```text
-public/assets/posts/
-└── my-first-post/
-    ├── cover.webp
-    ├── image-01.webp
-    └── files/
-        └── example.zip
+```ts
+{ id: 'github', label: 'GitHub', url: 'https://github.com/your-name', logo: '/assets/links/github.svg' }
 ```
 
-在文章中这样引用：
+`id` 要唯一且稳定；`label` 用作可读名称，`logo` 对应 `public/` 中的图标。邮箱可用 `mailto:`，RSS 可用 `/rss.xml`。预置图标的来源与授权见 `public/assets/links/LICENSE-simple-icons.md`。
+
+在 `site.ts` 的 `friendLinks` 中添加友邻；不需要友链时可保持空数组：
+
+```ts
+{ id: 'friend-id', nickname: '友邻名称', avatar: '/assets/friends/friend-id.png', url: 'https://friend.example.com/', description: '可选简介' }
+```
+
+`id`、`nickname`、`avatar`、`url` 必填，`description` 可省略。新增友邻会在小镇外围生成小屋；桌面端点击小屋或侧栏友链，会先聚焦小屋，再在新标签页打开对方网站。手机及启用「减少动态效果」时直接打开；若弹窗被拦截，页面会提供原链接。
+
+## 写作与发布文章
+
+文章放在 `src/content/posts/`，可按子目录整理。在仓库根目录运行：
+
+```bash
+npm run new -- "My New Post"
+```
+
+命令创建 `my-new-post.md` 草稿，自动填写 `townId: post-my-new-post`、当前本地日期和 `draft: true`，不会覆盖同名文件。草稿中的标题、摘要、分类、标签占位项与封面路径需填写或删除，不需要封面时删除 `cover` 和 `coverAlt`。也可复制 `src/content/posts/_article-template.md.example`，改名为 `.md` 后手动填写。
+
+| Frontmatter | 用途 |
+| --- | --- |
+| `townId` | 必填，全站唯一的永久 ID；同时用于文章 URL、建筑和评论归属，发布后保持稳定 |
+| `title`、`description`、`category`、`date` | 必填，分别是标题、摘要、单一分类和发布时间；`date` 建议含时区，如 `2026-09-20T12:00:00+08:00` |
+| `tags` | 可选，字符串数组；无标签时写 `[]` 或省略 |
+| `draft` | `true` 不发布；省略或 `false` 才会进入发布候选 |
+| `series`、`seriesIndex` | 可选，必须一起填写；同一系列的序号从 `0` 开始且不能重复 |
+| `cover`、`coverAlt` | 可选；封面使用 `/` 开头的站点路径，建议填写替代文字 |
+| `updatedAt` | 可选，最后更新时间 |
+| `featured` | 可选的保留字段，当前主题不按它排序 |
+
+草稿也会接受字段和资源校验。发布时将 `draft` 改为 `false`；未来日期的文章要等到**重新构建**且日期已到，才会出现在网站和 RSS 中。普通文章一般各有建筑，同系列文章共用一栋；修改 `townId`、系列归属或 `townSeed` 会影响文章映射。
+
+正文从 `##` 开始即可；页面标题取自 `title`，正文标题生成目录。资源示例：
 
 ```md
-![图片说明](/assets/posts/my-first-post/image-01.webp)
-
-[下载附件](/assets/posts/my-first-post/files/example.zip)
+![街景](/assets/posts/my-new-post/street.webp)
+[下载资料](/assets/posts/my-new-post/files/source.zip)
 ```
 
-## 4. 配置相关网站链接
+## 正文语法
 
-相关网站链接位于 `src/config/site.ts` 的 `siteConfig.profile.links`。框架已经准备好常见平台的向量 Logo，所有平台默认处于整行注释状态。
+支持标准 Markdown、表格、单换行、`~~删除线~~`、`==高亮==`、任务列表和带语言名称的围栏代码块。代码块由 Shiki 在构建时高亮；任务框仅用于展示，不可勾选。
 
-启用时：
+### 提示框与公式
 
-1. 在配置文件中找到目标平台。
-2. 删除对应配置行开头的 `//`。
-3. 只需把示例 `url` 替换成自己的链接；预置平台通常不需要修改 `id`、`label` 或 `logo`。
-4. 每个平台保持一行，便于以后继续增加平台级自定义项。
+提示框使用引用语法，颜色可选 `red`、`blue`、`yellow`、`green`、`purple`、`gray`（兼容 `gary`、`grey`）。在颜色后加 `+` 或 `-` 可设为可折叠，分别默认展开或收起；没有标记时为普通提示框。
 
-示例：
+```md
+> [!blue] 阅读提示
+> 这里是内容。
 
-```ts
-links: [
-  { id: 'github', label: 'GitHub', url: 'https://github.com/your-name', logo: '/assets/links/github.svg' },
-  { id: 'email', label: '电子邮箱', url: 'mailto:you@example.com', logo: '/assets/links/email.svg' },
-],
+> [!green]- 先收起
+> 点击标题可以展开。
 ```
 
-字段说明：
+行内公式用 `$E=mc^2$`，独立公式用 `$$...$$`。字面美元符号写作 `\$`。公式在构建时渲染；语法错误会保留原文以便排查。
 
-- `id`：站内唯一且稳定的标识，建议只使用小写字母、数字和连字符。
-- `label`：无障碍标签和鼠标悬停提示。
-- `url`：完整网页地址，也可以使用 `mailto:` 或站内路径。
-- `logo`：Logo 文件路径。预置图标位于 `public/assets/links/`。
+### 内容引用与嵌入
 
-如果不需要相关网站链接，保持所有示例行被注释即可。完整平台清单和自定义 Logo 方法见本文档第 11 节。
+`[[...]]` 创建站内引用；`![[...]]` 嵌入文件或文章。可使用文章 ID、唯一文件名、标题或完整路径；重名时使用更完整的路径。
 
-## 5. 配置友链
+```md
+[[my-post|自定义链接文字]]
+[[my-post#安装步骤]]
+[[my-post#^example-block]]
+[[#本篇标题]]
+[[/assets/posts/my-post/guide.pdf]]
 
-友链位于 `src/config/site.ts` 的 `friendLinks`。默认没有任何友链，示例行已被注释。
-
-启用时，把友邻头像或网站 Logo 放入 `public/assets/friends/`，然后删除示例行开头的 `//` 并填写信息：
-
-```ts
-export const friendLinks: FriendLink[] = [
-  { id: 'friend-id', nickname: '友邻名称', avatar: '/assets/friends/friend-id.png', url: 'https://friend.example.com/', description: '可选的友邻简介' },
-];
+![[my-post]]
+![[my-post#安装步骤]]
+![[/assets/posts/my-post/photo.webp|360]]
+![[/assets/posts/my-post/demo.mp4]]
+![[/assets/posts/my-post/guide.pdf#page=2]]
 ```
 
-- `id`、`nickname`、`avatar`、`url` 为必填项。
-- `description` 可选；不需要时可以删除 `description` 属性。
-- 每位友邻单独占一行。
-- `url` 应填写带 `http://` 或 `https://` 的完整地址。
+`#标题` 可定位章节，重复标题可附上上级标题；`#^标识` 定位内容块。段落末尾写 `^example-block`，即可给该段命名；其他完整块也可在后方空一行单独写标识。块标识由英文字母、数字和短横线组成，文章内不可重复。引用会定位目标并展开必要的折叠内容；浏览器返回时恢复阅读位置。缺失引用会显示提示。
 
-## 6. 新建文章
+独占一行的嵌入可以折叠，文章嵌入支持整篇、单个章节或内容块。图片、音频、视频和 PDF 可直接嵌入，其他附件显示链接；图片可用 `|360` 或 `|360x240` 指定尺寸。相对文件名先在当前文章的 `public/assets/posts/<文章源文件 ID>/` 查找。只读取公开目录中的资源；循环引用或过深嵌入会终止，并保留跳转入口。
 
-文章目录：
+### 图表
 
-```text
-src/content/posts/
-```
-
-在项目根目录运行发文命令，快速创建包含基础 Frontmatter 的 Markdown 草稿：
-
-```bash
-pnpm new "My New Post"
-# 也支持 npm run new -- "My New Post"
-```
-
-命令会生成 `src/content/posts/my-new-post.md`，自动填写 `townId: post-my-new-post`、带本地时区的当前日期和 `draft: true`，并预留标题、摘要、分类、标签与封面字段。英文文件名会转为小写，空格和下划线替换为 `-`；也可带 `.md` 后缀。已有同名文件不会被覆盖。
-
-内容校验也会检查草稿。请补齐必填字段和空标签项；不需要标签时改为 `tags: []`，不需要封面时删除 `cover` 和 `coverAlt`。准备发布后将 `draft` 改为 `false`。
-
-如需带详细字段注释的版本，仓库还提供了不会被构建系统读取的模板：
-
-```text
-src/content/posts/_article-template.md.example
-```
-
-复制并将文件扩展名改为 `.md`：
-
-```bash
-cp src/content/posts/_article-template.md.example src/content/posts/my-first-post.md
-```
-
-然后修改文件顶部 `---` 之间的 frontmatter 和下方正文。
-
-### Frontmatter 字段
-
-| 字段 | 必填 | 说明 |
-| --- | --- | --- |
-| `townId` | 是 | 全站唯一的永久 ID，同时用于 `/posts/<townId>/` 和小镇建筑定位。建议使用小写英文、数字、连字符，发布后不要随意修改 |
-| `title` | 是 | 文章标题 |
-| `description` | 是 | 文章摘要，用于列表、搜索和 SEO |
-| `date` | 是 | 发布日期，建议使用包含时区的 ISO 8601 格式，例如 `2026-09-20T12:00:00+08:00` |
-| `category` | 是 | 单一分类名称 |
-| `tags` | 否 | 标签数组，例如 `["Astro", "博客"]`；不需要时填写 `[]` 或省略 |
-| `draft` | 否 | `true` 时不发布；默认是 `false`，新文章建议先显式填写 `true` |
-| `updatedAt` | 否 | 最后更新时间，格式与 `date` 相同 |
-| `featured` | 否 | 推荐标记；当前主题暂未使用该字段进行视觉排序，保留供后续扩展 |
-| `cover` | 否 | 封面根路径，必须以 `/` 开头 |
-| `coverAlt` | 否 | 封面替代文字；使用封面时建议填写 |
-| `series` | 否 | 系列名称；必须和 `seriesIndex` 同时出现 |
-| `seriesIndex` | 否 | 系列内顺序，从 `0` 开始；同一系列内不可重复 |
-
-### 发布规则
-
-文章只有同时满足以下条件才会出现在站点中：
-
-1. 文件扩展名为 `.md`，并位于 `src/content/posts/` 或其子目录中。
-2. `draft` 为 `false` 或未填写。
-3. `date` 不晚于构建时刻。
-4. frontmatter 通过 `src/content.config.ts` 中的结构校验。
-
-`townId` 必须在所有文章中唯一。系列文章还要求同一 `series` 下的 `seriesIndex` 唯一。`npm run verify` 会检查文章 ID 与本地静态文件引用。
-
-### 系列与小镇建筑
-
-- 普通文章通常各自生成一栋建筑。
-- `series` 相同的文章会组成同一栋建筑。
-- `seriesIndex: 0` 是系列第一篇，`1` 是第二篇，以此类推。
-- 修改 `townId`、`series`、`seriesIndex` 或 `townSeed` 可能改变建筑映射。
-
-## 7. Markdown 正文
-
-正文支持常见 Markdown 和 Obsidian 风格扩展，完整写法见第 13 节：
+使用 `mermaid` 或 `pele` 围栏编写图表，构建时由 Pele 输出静态 SVG：
 
 ````md
-## 二级标题
-
-正文段落，支持 **粗体**、`行内代码` 和链接。
-
-- 列表项
-- 列表项
-
-```ts
-console.log('code block');
-```
-````
-
-文章标题来自 frontmatter 的 `title`，正文一般从二级标题 `##` 开始。页面会根据正文标题生成文章目录，并计算字数和预计阅读时间。
-
-## 8. 目录速查
-
-```text
-src/config/site.ts                     网站、作者、相关链接与友链配置
-src/content.config.ts                  文章字段结构与校验规则
-src/content/posts/                     Markdown 文章目录
-src/content/posts/_article-template.md.example 文章模板
-public/assets/profile/                 Logo 与头像
-public/assets/links/                   相关网站 Logo
-public/assets/friends/                 友链头像或 Logo
-public/assets/posts/                   文章图片与附件
-public/favicon.svg                     浏览器图标
-src/styles/global.css                  全站样式
-src/data/                              小镇布局、地图、天气与角色逻辑
-src/scene/brick-town/                  Babylon.js 小镇渲染代码
-```
-
-`public/assets/brick-town/` 包含小镇环境资源及其许可文件。除非同时替换相关环境资源和授权说明，否则不要删除其中内容。
-
-## 9. 常用命令
-
-```bash
-pnpm new "My New Post"   # 创建包含基础 Frontmatter 的 Markdown 草稿
-npm run dev              # 启动开发服务器
-npm run check            # Astro 与 TypeScript 检查
-npm run build            # 构建静态站点
-npm run verify:content   # 检查文章 ID 与本地资源引用
-npm run verify:markdown  # 检查 Markdown、公式、图表、嵌入与 HTML 安全过滤
-npm run verify           # 类型检查、构建、内容与核心功能检查
-npm run preview          # 本地预览 dist/ 构建结果
-```
-
-## 10. 部署
-
-该项目输出纯静态文件，可以部署到支持静态站点的平台。部署前：
-
-1. 将 `src/config/site.ts` 中的 `siteUrl` 改为正式域名。
-2. 确认网站 Logo、头像和 favicon 已替换；如使用自定义相关网站 Logo 或友链图片，也确认文件已放入对应目录。
-3. 将准备发布的文章设为 `draft: false`。
-4. 运行 `npm run verify`。
-5. 部署 `npm run build` 生成的 `dist/`。
-
-## 11. 预置相关网站 Logo
-
-相关网站配置位于 `src/config/site.ts` 的 `siteConfig.profile.links`。框架已经在 `public/assets/links/` 中准备了向量 Logo，配置时通常不需要自己寻找或上传图片。
-
-当前预置类别包括：
-
-- 通用：个人网站、邮箱、RSS
-- 代码与职业：GitHub、GitLab、Stack Overflow、DEV Community、Medium、LinkedIn、Notion
-- 国内平台：哔哩哔哩、微博、小红书、知乎、豆瓣、QQ、微信、爱发电
-- 国际社交：X、Telegram、Discord、Instagram、Threads、TikTok、Facebook、Reddit、Mastodon、Bluesky、WhatsApp、LINE、Signal、Snapchat、Tumblr、VK
-- 视频、直播、音乐与创作：YouTube、Twitch、Steam、Spotify、SoundCloud、Bandcamp、Pixiv、Niconico、Pinterest、Patreon、Ko-fi
-
-启用一个网站时，只需：
-
-1. 找到对应的注释行。
-2. 删除行首的 `//`。
-3. 把示例 URL 替换成自己的地址。
-4. 保留对应的 `logo` 路径。
-
-例如启用 X 和小红书：
-
-```ts
-links: [
-  { id: 'x', label: 'X', url: 'https://x.com/your-name', logo: '/assets/links/x.svg' },
-  { id: 'xiaohongshu', label: '小红书', url: 'https://www.xiaohongshu.com/user/profile/your-id', logo: '/assets/links/xiaohongshu.svg' },
-],
-```
-
-每个平台一行，后续可以继续增加 `title`、`rel` 或其他自定义字段。框架会把链接排列成紧凑网格；链接数量较多时，个人资料区域内部会出现滚动条，侧边栏本身也支持滚动，不会因为链接过多撑破页面。
-
-### 自定义 Logo
-
-如果预置列表中没有需要的平台：
-
-1. 将自己的 SVG、PNG 或 WebP 放入 `public/assets/links/`。
-2. 在 `siteConfig.profile.links` 添加一行。
-3. 将 `logo` 改成 `/assets/links/你的文件名.svg`。
-
-推荐优先使用正方形 SVG。若使用带颜色的图片，建议保证在日间和夜间模式下都具有足够对比度。
-
-### 版权与来源
-
-大部分预置图标来自 Simple Icons，相关授权文件保存在 `public/assets/links/LICENSE-simple-icons.md`；邮箱、个人网站和 LinkedIn 图标为本框架附带的简单向量图标。平台 Logo 仅用于识别链接目标，不代表与这些平台存在官方合作关系。
-
-## 12. 四季小镇
-
-顶部的「小镇季节」菜单可直接选择春、夏、秋、冬；「当季」按访客设备的本地月份自动选择北半球气象季节：3–5 月为春，6–8 月为夏，9–11 月为秋，12–2 月为冬。手动选择在当前页面会话内保持，刷新后恢复「当季」。昼夜与季节可以独立切换。
-
-四季共享同一份布局、文章建筑、河流、道路和小地图坐标。换季仅更新材质并替换覆盖物，不重新创建渲染器或重置缩放和平移。
-
-- 春：明亮的新绿与批量花朵。
-- 夏：保留原有小镇的绿色、树冠和水面。
-- 秋：金黄及橙色树冠、泛黄地表、树旁的静态落叶砖块。
-- 冬：雪地、根据建模阶段记录的表面生成屋顶/树冠/栏杆等雪盖、冰面；有降水时显示雪花，其他季节显示雨。
-
-降水仍每 15 分钟按站点种子和时间段确定，概率为 30%；冬季不会持续强制下雪。季节覆盖物不会随着天气累计增长。切换使用约 0.85 秒的材质渐变与覆盖层淡入，尚未模拟逐砖积雪和融雪。减少动态效果偏好会立即完成换季，停止行人/水光动画并隐藏动态降水。手机会降低覆盖物与雨雪数量；画面离开视口或页面隐藏时暂停渲染。
-
-维护入口：
-
-```text
-src/data/town-seasons.ts          四季配色、天气类型与月份选择
-src/data/town-weather.ts          统一雨雪数据与确定性天气
-src/scene/brick-town/seasons.ts   季节材质、覆盖层、转场与释放
-src/scene/brick-town/surfaces.ts  建模时注册的可积雪表面
-src/scene/brick-town/weather.ts   共享雨雪渲染及运动生命周期
-```
-
-运行 `npm run verify:seasons` 可检查换季时布局和基础网格稳定、覆盖物避让、雪盖拾取、反复切换资源释放及减少动态效果；`npm run verify` 已包含该检查。
-
-
-## 13. 富 Markdown 与 Obsidian 风格扩展
-
-文章继续放在 `src/content/posts/`，无需更换文件格式。渲染结果在构建时生成，不依赖读者浏览器下载代码高亮、MathJax 或图表渲染引擎。
-
-### 基础排版与代码
-
-普通段落中的单换行直接显示为换行，空行另起段落。支持标题、粗体、斜体、引用、有序／无序列表、表格、分隔线、图片、链接，以及：
-
-```markdown
-~~删除线~~
-==高亮文字==
-
-- [ ] 未完成任务
-- [x] 已完成任务
-
-[外部文档](https://example.com)
-```
-
-外部链接有下划线和末尾的链接图标，并在新标签页打开。任务列表作为文章内容展示，复选框不可交互。
-
-多行代码用三个反引号围起，在开头标注语言。Shiki 按明暗主题显示高亮；常用标记包括 `js`、`javascript`、`ts`、`typescript`、`tsx`、`jsx`、`python`、`bash`、`shell`、`powershell`、`json`、`yaml`、`html`、`css`、`sql`、`java`、`c`、`cpp`、`go`、`rust`。语言名不区分大小写；未指定或未知语言保留为纯文本代码块。
-
-
-代码块会在右上角显示语言名称，例如：
-
-````markdown
-```python
-print('hello')
-```
-````
-
-会显示 `Python`。未指定语言的代码块不会添加语言标签，未知语言会保留作者填写的名称并使用纯文本高亮。
-
-### 提示框
-
-用 `> [!颜色] 可选标题` 开始，后续内容继续使用引用语法。支持 `red`、`blue`、`yellow`、`green`、`purple` 和 `gary`（也接受 `gray`、`grey`）。标题使用深色，背景使用同色系浅色；没有前置图标。
-
-```markdown
-> [!blue] 阅读提示
-> 支持 **粗体**、==高亮==、链接、列表、代码与公式。
-> 每一行继续以 > 开始。
->
-> > [!purple]- 嵌套且默认收起
-> > 这里是内层内容。
-
-> [!red]+ 默认展开，可点击标题折叠
-> 内容。
-
-> [!green]
-> 不需要标题时省略标题。
-
-> [!]- 不指定颜色，默认蓝色
-> 默认收起的内容。
-```
-
-`[!颜色]+` 默认展开，`[!颜色]-` 默认收起；没有 `+`／`-` 时为普通提示框。可折叠框没有标题时显示「提示」。使用键盘可聚焦标题，再按 Enter 或空格展开。
-
-### 数学公式
-
-使用 MathJax 生成 SVG，支持行内 `$...$` 和独立的 `$$...$$`，包括 AMS 公式环境和文章内的自定义命令。公式颜色随主题调整；长的独立公式在自己的区域内横向滚动。
-
-```latex
-行内公式 $E = mc^2$。
-
-$$
-\sum_{i=1}^{n} i = \frac{n(n+1)}{2}
-$$
-```
-
-字面的美元符号写成 `\$`，代码块和行内代码中的公式语法不会执行。为保留 HTML 安全边界，不启用 TeX 的 HTML、远程加载或链接扩展。公式或图表语法有误时保留原文，便于排查，不中断整篇文章。
-
-### 文件与已有文章嵌入
-
-资源应位于 `public/` 内。推荐填写网站根路径，也可以使用唯一文件名：
-
-```markdown
-![[/assets/posts/my-post/示意图.png]]
-![[/assets/posts/my-post/示意图.png|360]]
-![[/assets/posts/my-post/示意图.png|360x240]]
-![[/assets/posts/my-post/示意图.png|图片替代文字]]
-![[/assets/posts/my-post/录音.mp3]]
-![[/assets/posts/my-post/演示.mp4]]
-![[/assets/posts/my-post/文档.pdf#page=2]]
-![[https://example.com/image.png]]
-```
-
-支持图片、音频、视频与 PDF；其他附件显示文件链接。PDF 下方保留打开文件的链接，便于不支持内嵌 PDF 的设备阅读。图片尺寸会受正文宽度限制。支持中文和空格文件名。
-
-相对文件名优先在 `public/assets/posts/<文章源文件 ID>/` 中查找，再查找公开资源中的唯一匹配。重名时请填写完整路径；缺失资源会显示提示。磁盘绝对路径、`..`、符号链接和公开目录之外的文件不会被读取。
-
-可独占一行通过可折叠容器嵌入已发布文章，例如 `![[obsidian-sync]]`、`![[obsidian-sync.md]]` 或 `![[文章标题]]`。存在重名时填写相对于 `src/content/posts/` 的完整路径。不会嵌入草稿或尚未到发布日期的文章；循环或过深的嵌入会停止，并保留原文章链接。句子内部的文章嵌入显示为文章链接。
-
-文章嵌入也支持标题和块引用，详见下方「内容引用与可折叠嵌入」。
-
-### Pele 图表
-
-图表由 Pele 渲染。保留 Mermaid 源语法，围栏语言写 `mermaid` 或 `pele` 均可：
-
-````markdown
 ```mermaid
 flowchart LR
-  A[小镇] --> B[文章建筑]
-  B --> C[阅读文章]
-```
-
-```pele
-sequenceDiagram
-  访客->>小镇: 选择一栋建筑
-  小镇-->>访客: 打开文章
+  A[小镇] --> B[文章]
 ```
 ````
 
-SVG 颜色随站点主题调整。图表中的图片、外部链接和点击脚本不启用。
+图表与公式的渲染在构建时完成；读者浏览器不需要下载相应引擎。图表中的脚本与外部点击链接不执行。
 
-### 内容引用与可折叠嵌入
+## 小镇、关于页与阅读入口
 
-「内容引用」使用 Obsidian 风格的 `[[...]]` 语法，指向已有文章、公开文件，以及文章内的标题或内容块；它不建立反向链接索引。常规的 `[文字](URL)` 仍适合任意网址。
+顶部季节菜单可选择春夏秋冬，或按设备本地月份使用「当季」（北半球气象季节）。手动选择仅在当前页面会话保持，刷新后恢复「当季」；换季不改变文章布局。降水每 15 分钟按时间段和站点种子确定，概率为 18%；冬季显示雪，其余季节显示雨。昼夜模式独立于季节。离屏、后台及「减少动态效果」模式会降低绘制开销。
 
-```markdown
-[[obsidian-sync]]
-[[obsidian-sync.md]]
-[[文章标题]]
-[[obsidian-sync|自定义链接文字]]
-[[obsidian-sync#配置步骤]]
-[[obsidian-sync#配置步骤#安装插件|安装说明]]
-[[obsidian-sync#^sync-tip]]
-[[#本篇标题]]
-[[#^local-tip|本篇提示]]
-[[/assets/posts/example/guide.pdf]]
-```
+小镇建筑、侧栏列表、档案、搜索均可进入文章。从小镇进入文章时会运镜；浏览器返回恢复运镜前的视角。中心风车、侧栏头像及「关于」入口通往 `/about/`。移动端点击建筑先显示预览，确认后运镜进入；「减少动态效果」偏好会跳过运镜。关于页文案在 `src/config/about.ts`：模板中的 `introduction`、卡片标题和段落默认留空，请按需填写；`sections` 支持可选链接。共用的昵称、头像、相关网站链接仍在 `site.ts`。
 
-链接会直接跳转到对应文章。解析会优先匹配当前文章目录下的 ID，再匹配完整 ID、文件名或标题；存在重名时应填写更完整的路径。链接到不存在的文章会保留 `[[...]]` 文字并显示提示，不会生成失效链接；当前文章页展示的是可直接跳转的文章入口。
+## 评论与 RSS
 
-标题引用通过标题文字匹配，支持 `#上级标题#下级标题` 区分同名标题；未指定上级时使用第一个匹配的标题。正文标题中的粗体、高亮等格式不会妨碍匹配。当前文章内的引用可以省略文章名，只写 `[[#标题]]` 或 `[[#^块标识]]`。点击引用会滚动到目标，并展开包含目标的折叠正文或提示框。
+### 可选评论（Giscus）
 
-到达时以浅蓝底色提示约 5 秒：标题引用覆盖整节及下级小节，块引用只覆盖目标块，原有高光与代码配色保持不变。站内引用直接切换文章；使用浏览器返回或前进时会恢复离开时的阅读位置和折叠状态。
+框架默认关闭评论。启用时先准备公开 GitHub 仓库、开启 Discussions，并在 [Giscus 配置页](https://giscus.app/zh-CN) 安装应用、选择仓库和分类。将页面生成的 `repo`、`repoId`、`category`、`categoryId` 填入 `src/config/comments.ts`，取消 `enabled: true` 的注释，重新构建部署。这些是公开标识，无需 GitHub Token；关闭该选项不会删除已有讨论。
 
-给段落末尾添加 `^块标识`，即可引用该段；标识使用英文字母、数字和短横线，同一篇文章内必须唯一。列表、引用、提示框、表格或代码块等完整块的标识可单独写在其后，与内容之间空一行。标识不会在阅读界面中显示。代码围栏及行内代码里的 `^标识`、引用语法都保持原样。
+每篇文章按 `townId` 关联讨论。评论区在靠近文章底部时才加载，支持日夜主题，正文阅读进度不含评论；首次提交评论时才会创建讨论。启用后应手动检查加载、登录和主题切换。
 
-````markdown
-这段话可以被单独引用。 ^sync-tip
+### 全文 RSS
 
-> [!blue] 阅读提示
-> 可以单独引用整个提示框。
+`/rss.xml` 默认启用，侧栏有订阅入口；站点标题、简介、文章的绝对链接均取自 `siteUrl`。它只收录已发布且发布时间不晚于构建时间的文章。提示框与文章嵌入在订阅中展开，任务框转为文字标记；公式和图表生成 `rss-assets/` 中的图片，音视频与附件给出链接。不同阅读器可能过滤样式或图片；精简 Linux 环境应安装所用语言的字体，避免图表文字缺失。部署时上传完整 `dist/`，包括 RSS 文件和生成的资源。可用 `npm run verify:rss` 检查构建结果。
 
-^reading-tip
+## 访问统计与部署
 
-![[obsidian-sync#配置步骤]]
-![[obsidian-sync#^sync-tip]]
-![[#^reading-tip]]
-````
+访问统计由[杜老师说 · 不蒜子统计平台](https://bsz.dusays.com/)提供；关于页展示全站 PV、UV，文章元信息展示单篇 UV。只有 `siteUrl` 指向的正式域名计数，本地和预览环境不计数；服务不可用时不阻断阅读。UV 是服务方估计的访客数，跨设备或清除浏览器存储后不保证去重。
 
-`![[文章#标题]]` 展示该标题及其下级小节，遇到同级或更高级标题时结束；`![[文章#^块标识]]` 只展示指定块，保留原有 Markdown 排版。嵌入的来源链接保留标题或块的位置，点击可回到原文对应位置。不存在的标题或块、重复的块标识会显示提示，不会生成错误落点。嵌入中的标题不加入当前文章目录；重复、循环或过深的嵌入有独立保护。
+静态页面可以部署到常见静态托管平台。Vercel 部署时请同时保留根目录 `api/`，用于同域 `/api/views` 统计代理；只上传 `dist/` 将失去该代理，前端会尝试直连第三方接口，是否可达取决于读者网络。其他静态托管平台同样使用直连方式。无需单独部署数据库。
 
-独占一行的 `![[...]]` 文件或文章嵌入会显示一个轻量标题栏。点击右侧小箭头可以展开或收起全部嵌入内容；文章嵌入标题中的文章名称仍可直接点击跳转。行内嵌入（例如段落中的小图片）保持行内显示，不增加折叠容器。
+部署前确认 `siteUrl`、图标、文章草稿状态与 `dist/` 中的 RSS 和图片资源。构建后修改文章或等待未来文章到期，都需要重新构建和部署。
 
+## 常用文件与检查
 
-## 14. 可选文章评论（Giscus）
-
-框架预留了文章底部的 Giscus 评论区，**默认关闭**。不开启时不显示评论标题或占位区域，也不会加载评论组件或请求 Giscus。要使用评论，完成以下配置即可，无需安装额外依赖。
-
-### 配置自己的仓库
-
-1. 准备一个公开的 GitHub 仓库，在该仓库的 Settings → General → Features 中开启 Discussions。评论仓库可以与博客源码仓库相同，也可以单独建立。
-2. 在 [Giscus 配置页](https://giscus.app/zh-CN) 按指引安装 Giscus App，并授权它访问评论仓库。
-3. 在配置页选择仓库和 Discussion 分类，建议使用只允许维护者发起讨论的 Announcements 分类。复制生成配置中的 `data-repo`、`data-repo-id`、`data-category`、`data-category-id`。
-4. 将四项对应填入 `src/config/comments.ts` 的 `repo`、`repoId`、`category`、`categoryId`。这些都是公开标识，**不需要填写 GitHub Token**。模板中未预填原作者的评论仓库。
-5. 确认 `src/config/site.ts` 中的 `siteUrl` 已填写为自己的正式站点地址，用于讨论中的原文链接。
-
-### 启用与关闭
-
-`src/config/comments.ts` 中的启用代码默认注释：
-
-```ts
-export const commentConfig: CommentConfig = {
-  // enabled: true,
-  // 下方为仓库、分类和主题配置……
-};
-```
-
-填写仓库配置后，将 `// enabled: true,` 改为 `enabled: true,`，然后重新构建并部署，文章下方就会出现评论区。重新注释该行即可关闭；关闭不会删除 GitHub 中已有的讨论。
-
-框架按文章永久 `townId` 精确关联讨论，无需修改组件中的映射方式。已发布文章应保留原 `townId`，避免评论关联到新的讨论。首次评论或回应时由 Giscus 建立对应讨论，单纯浏览不会创建空讨论。
-
-评论区在接近文章底部时才加载，支持日夜主题切换；正文阅读进度不包含评论区。读者可直接阅读，登录 GitHub 并授权 Giscus 后即可评论或回应。GitHub 授权会话保存在浏览器本地的 `giscus-session` 中；评论不可用时可重试或前往 GitHub Discussions。
-
-启用后，建议用一篇已发布文章手动检查评论区的加载、主题切换和 GitHub 登录；框架不附带浏览器自动化脚本。
-
-
-## 15. 加载性能与运行时节能
-
-这些优化默认生效，无需额外开启，不改变小镇的建筑细节、渲染分辨率或阴影质量参数：
-
-- 直接进入小镇时，提前发现运行库、WebGL 着色器和环境贴图；原有字体在基础画面就绪后加载，避免与小镇冷启动争用带宽。直接进入文章或档案时立即加载字体，进入小镇前不下载 3D 运行库和环境贴图。
-- WebGL 着色器源码合并交付，保留原始算法；环境贴图使用无损 WebP 面片，保留原来的像素、分辨率、各级细节和光照参数。
-- 手机侧边栏关闭时不下载隐藏的署名图片与头像；打开后正常加载配置的原图。框架默认保留轻量 SVG 标识与头像，不包含作者个人博客的图片。
-- 相同种子下复用静态候选地块的计算结果，但不会缓存最终文章布局。发布、删除文章或调整系列后仍会重新生成对应建筑关系。
-- 小镇离开可视区域或页面切到后台时暂停绘制；切到文章或档案后释放场景和 GPU 资源。
-- 系统启用“减少动态效果”时，画面稳定后停止连续重绘。拖动、缩放、悬停高亮、换季、切换主题、视口变化和天气时段变化会唤醒绘制；关闭该系统偏好后恢复原有动画。
-
-判断线上加载表现时，请先执行 `npm run build`，再用 `npm run preview` 检查生产构建。开发服务器还包含即时内容处理、依赖预构建与热更新，耗时不能直接代表线上静态页面。真实体验也受网络、设备 GPU、浏览器缓存和文章规模影响，不能把本机测试时间视为所有设备的保证。
-
-`npm run verify` 包含内容、四季切换、Markdown 和 RSS 检查。针对新增文章后的建筑位置、冷启动、GPU 占用与手机滑动体验，请在自己的设备上用生产构建（`npm run build && npm run preview`）测试；框架不附带依赖特定文章、浏览器或硬件的专项脚本。
-
-
-## 16. 全文 RSS 订阅
-
-RSS 默认启用，入口位于侧边栏底部的网站署名之后。桌面端直接显示，手机端展开侧边栏后可见；页面也提供 RSS 自动发现标记。
-
-部署前，请将 `src/config/site.ts` 中的 `siteUrl` 改为真实的完整站点地址。订阅地址为 `https://你的域名/rss.xml`，站点标题、简介和语言也从该配置读取。无需申请第三方服务或设置令牌。
-
-构建时生成全文订阅：
-
-- 与网站共用文章发布规则，只包含非草稿且发布日期不晚于构建时间的文章，按发布日期倒序排列。修改文章后需重新构建部署；未来文章到期后也需要重新构建才会发布。
-- 基础 Markdown、单换行、删除线、高亮、表格，以及代码块的语言名称与静态语法高亮会保留。
-- 提示框、嵌入文章、章节或块引用的嵌入全部展开，任务列表改为 `☐` / `☑`，不依赖阅读器的脚本和折叠功能。
-- LaTeX 公式和 Mermaid/Pele 图表生成 PNG 图片，输出到 `rss-assets/`。公式保留 LaTeX 替代文字，图表保留标签文字；转换失败时提供原文入口。
-- 图片、文章引用、章节/块链接与附件使用绝对地址；音视频和 PDF 等内容提供文件链接。每篇订阅末尾保留原文入口。
-
-不同阅读器可能会过滤颜色、代码高亮样式或默认不加载图片，最终排版不保证完全等同于网站正文。图表中的文字由构建机器的字体渲染；在精简 Linux 构建环境中，应安装支持所用语言的字体（中文可使用 Noto Sans CJK），避免图表文字缺字。
-
-这些处理仅发生在构建阶段，不向网站前端额外加载公式、图表或图片转换运行库。部署时请上传完整 `dist/`，包括 `rss.xml` 和 `rss-assets/`（没有公式或图表时可能不生成此目录），不要将订阅地址重写为首页。
+| 路径 | 用途 |
+| --- | --- |
+| `src/config/site.ts`、`src/config/about.ts`、`src/config/comments.ts` | 站点、关于页、评论 |
+| `src/content/posts/`、`src/content.config.ts` | 文章及字段校验 |
+| `public/assets/` | 图片和附件 |
+| `src/data/`、`src/scene/brick-town/` | 小镇布局和 3D 场景 |
+| `src/styles/global.css` | 全站样式 |
 
 ```bash
-npm run build
-npm run verify:rss
+npm run check           # 类型与 Astro 检查
+npm run verify:content  # 文章 ID 和资源引用
+npm run verify:markdown # 富 Markdown 和嵌入
+npm run verify:features # 地块、友链与统计等功能
+npm run verify          # 完整检查（含构建）
+npm run build           # 生成 dist/
+npm run preview         # 预览生产构建
 ```
 
-检查同时覆盖扩展语法转换、图片生成与稳定哈希、绝对链接和实际构建的订阅条目。默认没有文章时，仍会生成有效的空订阅；这项检查也支持空站点。
-
-## 友邻小镇、关于页与访问统计
-
-友邻继续在 `src/config/site.ts` 的 `friendLinks` 中维护。友邻区位于文章城区外侧，环绕宽阔公共绿地，入口和连接道路朝向文章区。只按实际友链数量生成小屋；预留空地与后续地块，新增友链优先填充远侧圆弧的空位，满后使用外围扩展地块。在列表末尾追加友链时，已有友邻位置保持稳定；新增扩展地块会相应扩大文章避让区域。分配文章建筑之前会预留庭院及连接道路，必要时重新安排原先占位的文章。悬停小屋或列表项显示信息，点击后复用文章建筑的运镜，抵达后在新标签页访问友邻，保留当前小镇。窄画布与开启「减少动态效果」时跳过运镜，直接打开。浏览器拦截新标签页时提供原始链接重试，不覆盖当前页面。运镜中的新选择、拖动或 Escape 会取消原定跳转。列表保留原始链接，修饰键点击仍可直接访问。
-
-中心风车、侧栏名片的头像，以及顶部「档案」之后的「关于」均先运镜到风车，再进入 `/about/`。移动端跳过运镜；顶部只保留工具栏，「小镇」「档案」「关于」入口放在侧边栏上部，不附带数字。关于页采用作者标题、头像统计区域与两列介绍，不包含目录与留言板。站点统计只在关于页展示，单篇阅读量保留在文章元信息中。`siteConfig.launchDate` 可选填真实建站日期；未设置时按首篇文章计算「记录天数」，不将其冒充建站时间。
-
-访问统计使用支持单篇 UV 的[杜老师说 · 不蒜子统计平台](https://bsz.dusays.com/)，无需 Redis、API Key 或独立统计账号；Vercel 上使用同域函数提高不同设备的可达性，纯静态托管仍可直连。关于页显示站点页面访问量（PV）与访问人数（UV）；文章元信息末尾以主题蓝色显示「N 人看过」，使用该文章的独立访客数（Page UV），不使用打开次数（Page PV）。同一访客返回首页再进入同篇文章，PV 会按实际进入的两个页面增加 2，站点 UV 和这篇文章的阅读人数不增加；同一次页面进入的重复组件请求只发送一次。跨设备或清除浏览器存储后无法保证识别为同一位自然人，UV 是服务方的访客估计值。
-
-`src/lib/views.ts` 仅在 `siteConfig.siteUrl` 的正式域名下计数；localhost 与部署预览不计数。正式域名的 `www` 与不带 `www` 两种地址均可使用，统计统一归入 `siteConfig.siteUrl`，不拆成两个站点。Vercel 部署时，根目录 `api/views.ts` 提供同域 `/api/views?path=...` 接口，由服务器向 `https://bsz.dusays.com/api` 转发，浏览器无需直连第三方统计域名或进行跨域预检。该函数与 Astro 静态输出一起部署，无需额外依赖、数据库密钥或服务账号。请保留根目录的 `api/`，不要只把 `dist/` 上传到 Vercel；纯静态托管若没有此接口，会在接口返回 404/405 后回退为浏览器直连，这种部署仍受设备网络与跨域拦截影响。
-
-同域接口只允许正式站点的 GET/POST 请求，验证文章路径、访客标识与来源，拒绝部署预览流量；不会成为可转发任意地址的代理。转发时明确传递正式域名和文章路径，不附带查询参数或锚点，也不把用户的原始 IP 与 User-Agent 作为额外请求头转发。服务方签发的访客标识仍保存在本站 `localStorage` 的 `town:views:dusays:identity` 中，通过 `Authorization` 复用；新访客另生成保存在 `town:views:dusays:visitor` 的随机浏览器标识，供代理区分访客，避免服务器共同 IP 将所有读者合并。现有统计数据库、签名标识及会话缓存继续沿用，不因这次同域代理更新而清零。
-
-各页面独立请求，上一页响应缓慢不会阻塞当前页。服务器计数请求最多等待 4 秒，只读请求最多等待 3 秒；浏览器分别允许 6 秒和 4.5 秒，以覆盖服务器网络时间。计数失败后仅补发不增加计数的 GET 查询，不重发 POST；若仍失败，5 秒后再进行一次只读恢复，设备恢复联网时也会只读刷新，避免暂时断网后本页一直缺失统计。浏览器端使用 `AbortController` 加定时器实现超时，并通过 `crypto.getRandomValues` 生成访客标识，不依赖较新的 `AbortSignal.timeout` 或 `crypto.randomUUID`。
-
-成功结果按文章路径保存在当前标签页的会话缓存中，重新进入文章时先显示上次成功值，再由后台请求更新。禁用浏览器存储时仍保留内存缓存。没有缓存且服务完全不可达时暂不显示数字，不编造零值，也不阻止阅读。`npm run verify:features` 同时检查同域代理的来源/参数校验、预览隔离、访客区分与只读恢复，并真实加载编译后的 ESM 函数产物，检查运行时导入。函数内部引用 TypeScript 源文件时使用对应的 `.js` 导入路径，不能照搬仅适用于前端打包器的无扩展名导入。
-
-此服务与先前的 `busuanzi.9420.ltd`、`busuanzi.ibruce.info` 使用独立数据库，部署本次更新后重新累计，不自动迁移或混加历史数据。其中 `busuanzi.ibruce.info` 只提供单篇 PV，受 Cookie 与 Referrer 限制的历史值也无法可靠还原为文章阅读人数。上线前请确认 `siteUrl` 与实际域名一致。
-
-侧栏名片只有头像框会联动高亮风车，姓名、简介、空白区域和社交链接不触发高亮；头像可点击，也支持键盘聚焦与 Enter 打开。关于页头像下方显示 `siteConfig.profile.name`（个人昵称）。
-
-框架的关于页卡片标题、正文和可选链接默认留空，不包含个人站点文案；四张卡片的 `id` 保留，用于稳定标识。按需填写 `title`、`paragraphs`，以及可选的 `link: { label, href }`。
-
-关于页文字集中在 `src/config/about.ts`：`introduction` 修改头像旁的介绍，`sections` 修改四张卡片的标题、段落和可选链接。姓名、头像、签名与相关网站图标仍在 `src/config/site.ts` 的 `profile` 中维护；图标素材放在 `public/assets/links/`。卡片默认纯白，鼠标悬停时出现淡蓝玻璃、随指针移动的光照和轻微视差；触屏与减少动态效果模式不使用倾斜动画。
-
-`npm run verify:features` 检查 120 篇文章与全部 63 个友邻位置并存、完整地块与连接道路避让、追加文章和友链时的位置规则、模型拾取、统计计算，以及外部计数接口、预览隔离和错误降级。
-
-
-例如，编辑 `src/config/about.ts` 中的一张卡片：
-
-```ts
-{
-  id: 'me',
-  title: '介绍标题',
-  paragraphs: ['第一段介绍。', '第二段介绍。'],
-  // link: { label: '链接文字', href: 'https://example.com/' },
-}
-```
-
-修改 `introduction` 可以添加头像旁的介绍文字。关于页头像下方的小标签使用作者昵称 `profile.name`，不使用网站简称。首次部署前，请填写 `siteConfig.siteUrl` 为正式域名；本地和预览域名不计数，未接通统计时显示「—」。
+框架的 `npm run verify` 运行类型检查、构建、内容、季节、Markdown、RSS 与功能验证。浏览器和真机上的动画与加载体验需要另行使用 `npm run build && npm run preview` 检查。

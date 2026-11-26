@@ -4,6 +4,8 @@
 
 Town Blog Framework 是一个基于 **Astro + React + Babylon.js** 的静态博客框架。每篇文章都会在小镇中拥有一栋建筑；同一系列的文章会组成同一栋建筑的不同楼层。读者可以探索地图，也可以通过档案、分类、标签、搜索和文章目录直接阅读。
 
+想体验真实效果？[参观我的个人博客「黑蚊子的门」](https://www.heavensdoor1.top/)。
+
 <p align="center">
   <img src="assets/readme/town-default-view.png" alt="Town Blog Framework 本地运行的小镇首页" width="100%" />
 </p>
@@ -12,7 +14,7 @@ Town Blog Framework 是一个基于 **Astro + React + Babylon.js** 的静态博�
   <em>文章不只是列表中的条目，而是小镇里可以被发现、被记住的一栋栋建筑。</em>
 </p>
 
-展示截图均取自本地运行的博客，新增文章使用临时演示内容；正文示例用于展示渲染能力，不展示个人文章详情。
+小镇截图均取自本地运行的博客，使用默认方向下拉至最高的全景视角；成长展示中的新增文章使用临时演示内容。正文示例用于展示渲染能力，不展示个人文章详情。
 
 ## 为什么是小镇？
 
