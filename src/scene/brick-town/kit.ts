@@ -8,6 +8,7 @@ import type { Scene } from '@babylonjs/core/scene.js';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode.js';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData.js';
 import { TownEdgeMaterial } from './edge-reveal';
+import { TownFocusMaterial } from './focus-material';
 import { edgeCell } from '../../data/town-outline';
 
 export const STUD = 0.36;
@@ -38,6 +39,7 @@ const materialFor = (scene: Scene, color: string, glass: boolean, group: string)
     material.clearCoat.isEnabled = true; material.clearCoat.intensity = 0.25; material.clearCoat.roughness = 0.21;
     material.environmentIntensity = 0.7;
     new TownEdgeMaterial(material, scene);
+    if (group === 'plastic' || group === 'season-snow') new TownFocusMaterial(material);
     if (glass) material.alpha = 0.86;
     cache.set(key, material);
   }

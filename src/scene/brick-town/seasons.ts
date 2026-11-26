@@ -166,6 +166,7 @@ export function createSeasonController(context: OverlayContext) {
     get articleMeshes(){return active.articleMeshes;},
     get coverCount(){return active.coverCount;},
     get transitioning(){return progress<1;},
+    get opacity(){return 1-(1-progress)**3;},
     dispose(){for(const mesh of active.meshes)mesh.dispose(false,false);active={meshes:[],articleMeshes:[],coverCount:0};},
   };
 }

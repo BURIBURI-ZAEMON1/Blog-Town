@@ -41,30 +41,22 @@ export type TownPost = TownPostSummary & {
 
 export type SceneAnchor = { x: number; y: number };
 export type TownCameraPose = { x: number; y: number; z: number; zoom: number };
+export type TownTarget = { kind: 'post' | 'place'; id: string };
 
 export type TownSceneProps = {
   posts: TownPostSummary[];
   layout?: TownLayout;
   initialCamera?: TownCameraPose;
-  activePostId?: string;
-  hoveredPostId?: string;
-  hoveredPlaceId?: string;
+  target?: TownTarget;
+  matchingPostIds?: readonly string[];
   newPostIds?: readonly string[];
   guidePostId?: string;
-  query: string;
-  category?: string;
-  tag?: string;
-  categoryPreview?: boolean;
-  tagPreview?: boolean;
   colorMode: 'day' | 'night';
   season: Season;
   reducedMotion: boolean;
-  onHoverPlace?: (id?: string, anchor?: SceneAnchor) => void;
-  onResolvePlaceAnchor?: (id: string, anchor: SceneAnchor) => void;
-  onSelectPlace?: (id: string, pointerType?: string) => void;
-  onHoverPost: (id?: string, anchor?: SceneAnchor) => void;
-  onResolvePostAnchor: (id: string, anchor: SceneAnchor) => void;
-  onSelectPost: (id: string, pointerType?: string) => void;
+  onHoverTarget: (target?: TownTarget, anchor?: SceneAnchor) => void;
+  onResolveTargetAnchor: (target: TownTarget, anchor: SceneAnchor) => void;
+  onSelectTarget: (target: TownTarget, pointerType?: string) => void;
   onTownExplored?: () => void;
 };
 
